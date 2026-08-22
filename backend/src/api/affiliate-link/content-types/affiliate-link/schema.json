@@ -1,0 +1,24 @@
+{
+  "kind": "collectionType",
+  "collectionName": "affiliate_links",
+  "info": {
+    "singularName": "affiliate-link",
+    "pluralName": "affiliate-links",
+    "displayName": "Marketing Referral Link"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "aflUniqueCode": { "type": "string", "required": true, "unique": true },
+    "aflTotalClicks": { "type": "integer", "default": 0 },
+    "affiliateAgent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "targetAuctionItem": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::auction-item.auction-item"
+    }
+  }
+}

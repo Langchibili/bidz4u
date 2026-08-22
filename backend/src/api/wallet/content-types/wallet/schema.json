@@ -1,0 +1,12 @@
+{
+  "kind": "collectionType",
+  "collectionName": "wallets",
+  "info": { "singularName": "wallet", "pluralName": "wallets", "displayName": "Wallet" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "wltAvailableBalance": { "type": "decimal", "default": 0.00 },
+    "wltLockedEscrowBalance": { "type": "decimal", "default": 0.00 },
+    "wltCurrencyCode": { "type": "string" },
+    "walletOwner": { "type": "relation", "relation": "oneToOne", "target": "plugin::users-permissions.user", "inversedBy": "userWallet" }
+  }
+}

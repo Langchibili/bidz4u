@@ -1,0 +1,29 @@
+{
+  "kind": "collectionType",
+  "collectionName": "commission_ledgers",
+  "info": {
+    "singularName": "commission-ledger",
+    "pluralName": "commission-ledgers",
+    "displayName": "Agent Earnings Ledger"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "comTotalPlatformFeeUsd": { "type": "decimal", "required": true },
+    "comAgentPayoutCutUsd": { "type": "decimal", "required": true },
+    "comPayoutStatus": {
+      "type": "enumeration",
+      "enum": ["accruing", "withdrawn_to_wallet"],
+      "default": "accruing"
+    },
+    "beneficiaryAgent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "sourceAuction": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::auction-item.auction-item"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "kind": "collectionType",
+  "collectionName": "bidz4upays",
+  "info": {
+    "singularName": "bidz4upay",
+    "pluralName": "bidz4upays",
+    "displayName": "Bidz4uPay Transaction"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "payPaymentId": { "type": "string", "required": true, "unique": true },
+    "payReference": { "type": "string", "required": true, "unique": true },
+    "payPurpose": {
+      "type": "enumeration",
+      "enum": ["walletdeposit", "winnerpay", "withdraw"],
+      "required": true
+    },
+    "payDirection": {
+      "type": "enumeration",
+      "enum": ["collection", "payout"],
+      "required": true
+    },
+    "payAmount": { "type": "decimal", "required": true },
+    "payCurrencyCode": { "type": "string", "required": true },
+    "payStatus": {
+      "type": "enumeration",
+      "enum": ["pending", "processing", "completed", "failed"],
+      "default": "pending"
+    },
+    "payGatewayName": { "type": "string" },
+    "payGatewayReference": { "type": "string" },
+    "payGatewayResponse": { "type": "json" },
+    "payMethod": {
+      "type": "enumeration",
+      "enum": ["mobile_money", "card", "bank_account"]
+    },
+    "payRelatedEntityType": { "type": "string" },
+    "payRelatedEntityId": { "type": "string" },
+    "payMetadata": { "type": "json" },
+    "payNotes": { "type": "string" },
+    "payIpAddress": { "type": "string" },
+    "payFailureReason": { "type": "string" },
+    "payInitiatedAt": { "type": "datetime" },
+    "payCompletedAt": { "type": "datetime" },
+    "payFailedAt": { "type": "datetime" },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

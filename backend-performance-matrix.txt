@@ -1,0 +1,68 @@
+bidz4u.com — Full Permissions Matrix
+
+Configure these under Settings → Users & Permissions Plugin → Roles in the Strapi admin. ✅* = scoped in controller code (Strapi's permission toggle can't express row-level ownership by itself — the check happens inside the custom action, e.g. ctx.state.user.id comparisons).
+
+Public Role
+Content Type	find	findOne	create	update	delete
+Currency	✅	✅	❌	❌	❌
+Country	✅	✅	❌	❌	❌
+Admn Setting	❌	❌	❌	❌	❌
+Wallet	❌	❌	❌	❌	❌
+Transaction	❌	❌	❌	❌	❌
+Auction Item	✅	✅	❌	❌	❌
+Bid	❌	❌	❌	❌	❌
+OTP Verification	❌	❌	❌	❌	❌
+Affiliate Link	❌	❌	❌	❌	❌
+Commission Ledger	❌	❌	❌	❌	❌
+Users (users-permissions)	❌	❌	❌ (custom flow — see below)	❌	❌
+
+Custom (non-CRUD) actions — Public role:
+
+Action	Endpoint	Enabled
+Country → effectiveSettings	GET /countries/:id/effective-settings	✅
+Account Exist Check → checkUser	POST /account-exist-check/check-user	✅
+User Registration → register	POST /user-registration/register	✅
+OTP Verification → send	POST /auth-otp/send	✅
+OTP Verification → resend	POST /auth-otp/resend	✅
+OTP Verification → verify	POST /auth-otp/verify	✅
+Auction Item → lightweightStatus	GET /auction-items/:id/lightweight-status	✅
+Affiliate Link → trackClick	POST /affiliate-links/:code/click	✅
+Bidz4uPay → webhook	POST /bidz4upay/webhook/:gateway	✅ (signature-verified in code, not by role)
+Bidz4uPay → withdrawWebhook	POST /bidz4upay/webhook/:gateway/withdraw	✅ (signature-verified in code)
+
+Everything else stays unchecked for Public — auction browsing and country/currency lookups are the only things an anonymous visitor should be able to do before logging in.
+
+Authenticated Role
+Content Type	find	findOne	create	update	delete
+Currency	✅	✅	❌	❌	❌
+Country	✅	✅	❌	❌	❌
+Admn Setting	❌	❌	❌	❌	❌
+Wallet	❌ (use wallet.myWallet instead)	❌	❌ (system-created on user signup)	❌ (system only, via payments)	❌
+Transaction	❌ (use transaction.myTransactions instead)	❌	❌ (system-created via bidz4upay)	❌	❌
+Auction Item	✅	✅	✅	✅ (owner only)*	❌
+Bid	❌ (blocked — see D below)	✅	❌ (blocked — use bid.place)	❌ (blocked — bids are immutable)	❌
+OTP Verification	❌	❌	❌ (blocked — use otp-verification.send)	❌ (blocked)	❌
+Affiliate Link	❌	✅	✅ (owner auto-assigned)*	❌	❌
+Commission Ledger	❌ (use commission-ledger.myEarnings instead)	❌	❌ (system-created on commission events)	❌	❌
+Users (users-permissions)	❌	—	—	✅ (own record only, /users/:id)*	❌
+
+Custom (non-CRUD) actions — Authenticated role:
+
+Action	Endpoint	Enabled
+Wallet → myWallet	GET /wallets/me	✅
+Transaction → myTransactions	GET /transactions/me	✅
+Auction Item → confirmDelivery	POST /auction-items/:id/confirm-delivery	✅ (buyer/seller scoped in code)*
+Bid → place	POST /bids/place	✅
+Bid → myBids	GET /bids/me	✅
+Commission Ledger → myEarnings	GET /commission-ledgers/me	✅
+Bidz4uPay → initiate	POST /bidz4upay/initiate	✅
+Bidz4uPay → getPaymentStatus	GET /bidz4upay/status/:reference	✅ (own records only, filtered by user: ctx.state.user.id in code)*
+Bidz4uPay → requestWithdrawal	POST /bidz4upay/request-withdrawal	✅
+Notes on the ❌s that look surprising
+Bid find/create/update all ❌ for Authenticated — this is intentional, not an oversight. bid.create/update/delete are explicitly overridden in the controller to reject with methodNotAllowed (see the earlier custom-controllers doc) — bids can only be created through bid.place, which enforces wallet balance, currency conversion, and extension-window logic that the raw REST create would bypass entirely. Toggling create on in the permissions panel wouldn't actually let anyone bypass this since the controller itself refuses — but leave it off anyway so the admin panel doesn't advertise a route that always 405s.
+Wallet/Transaction find/findOne ❌ for the same reason — a raw GET /wallets with no filter would leak every user's balance to any authenticated user. myWallet/myTransactions scope to ctx.state.user.id internally, which the generic find action can't do without a forced filter Strapi's permission UI doesn't support out of the box.
+OTP Verification all ❌ — send/resend/verify are the only entry points, and those are Public (no login yet at OTP time, obviously). An authenticated user has no legitimate reason to touch this content type directly.
+Users update — own record only — this is Strapi's default behavior via /users/:id once update is checked; there's no built-in "own record only" toggle, so if you check this on, also confirm your users-permissions config restricts update to the record matching ctx.state.user.id (default users-permissions behavior does this already for non-admin JWTs — just verify it hasn't been loosened).
+What's deliberately absent from both tables
+
+Admn Setting has zero permissions on either role — it's only ever read server-side via resolveSettingsForCountry, never exposed directly over REST. If you later want an admin-facing settings page in your own admin panel (not Strapi's), that should go through the Strapi admin API (different auth entirely — admin JWT, not users-permissions), not this matrix.

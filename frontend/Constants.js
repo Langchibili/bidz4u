@@ -1,0 +1,59 @@
+/**
+ * bidz4u.com - Centralized Application Constants & Fallbacks
+ */
+
+export const GLOBAL_DEFAULTS = {
+  FALLBACK_CURRENCY_CODE: 'ZMW',
+  FALLBACK_CURRENCY_SYMBOL: 'ZK',
+  FALLBACK_POLL_INTERVAL_MS: 3000,
+
+  FALLBACK_MAX_TIME_BEFORE_BID_CLOSE_MINS: 1440,
+  FALLBACK_MIN_BIDS_BEFORE_AUCTION_CLOSE: 1,
+  FALLBACK_BID_EXTENSION_TRIGGER_WINDOW_MINS: 10,
+
+  FALLBACK_MIN_AMOUNT_BEFORE_BID_TYPE: 'percentage',
+  FALLBACK_MIN_AMOUNT_BEFORE_BID_VALUE: 5.0,
+  FALLBACK_TIME_TO_ALLOW_WINNER_TO_PAY_MINS: 30,
+  FALLBACK_FORFEITURE_SPLIT_SELLER_PERCENTAGE: 50.0,
+
+  FALLBACK_MAX_SIMULTANEOUS_BIDS_PER_USER: 3,
+  FALLBACK_COOL_DOWN_PERIOD_AFTER_FORFEIT_MINS: 1440,
+  FALLBACK_AGENT_COMMISSION_SPLIT_PERCENTAGE: 50.0,
+  FALLBACK_ABSORB_PAYMENT_FEES: false,
+  FALLBACK_PAYMENT_GATEWAY: 'pawapay',
+};
+
+export const STORAGE_KEYS = {
+  AUTH_TOKEN: 'bidz4u_jwt',
+  USER_DATA: 'bidz4u_user',
+  COUNTRY_CONFIG: 'bidz4u_country_config',
+  REFERRAL_CODE: 'bidz4u_referral_tracking_id',
+  SETTINGS: 'bidz4u_effective_settings',
+};
+
+export const SOCKET_NAMESPACES = {
+  MAIN_WEB: '/main-sockets',
+  NATIVE_DEVICE: '/device-sockets',
+};
+
+export const CUSTOM_THEME_COLORS = {
+  PRIMARY_DEEP_BLUE: '#0A192F',
+  SECONDARY_SURFACE_BLUE: '#172A45',
+  BACKGROUND_DARK_CANVAS: '#020C1B',
+  ACCENT_GOLD: '#F59E0B',
+  ACCENT_GOLD_DARK: '#D97706',
+  TEXT_LIGHT: '#F8FAFC',
+  TEXT_MUTED: '#94A3B8',
+};
+
+export const SOCKET_EVENTS = {
+  BID_PLACED: 'bid:placed',
+  AUCTION_EXTENDED: 'auction:extended',
+  AUCTION_CLOSED: 'auction:closed',
+  BID_FORFEITED: 'bid:forfeited',
+  PAYMENT_SUCCESS: 'payment:success',
+  PAYMENT_FAILED: 'payment:failed',
+  DEVICE_HAPTIC: 'device:haptic',
+  NOTIFICATION_NEW: 'notification:new',
+  ADMIN_ANNOUNCEMENT: 'admin:announcement',
+};

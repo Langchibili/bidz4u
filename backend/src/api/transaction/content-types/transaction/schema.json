@@ -1,0 +1,16 @@
+{
+  "kind": "collectionType",
+  "collectionName": "transactions",
+  "info": { "singularName": "transaction", "pluralName": "transactions", "displayName": "Transaction" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "txReference": { "type": "string", "required": true, "unique": true },
+    "txGatewayReference": { "type": "string" },
+    "txAmount": { "type": "decimal", "required": true },
+    "txCurrencyCodeAtExecution": { "type": "string", "required": true },
+    "txType": { "type": "enumeration", "enum": ["deposit", "withdrawal", "escrow_lock", "escrow_release", "refund", "forfeited_penalty"] },
+    "txStatus": { "type": "enumeration", "enum": ["pending", "completed", "failed", "reversed"], "default": "pending" },
+    "txMeta": { "type": "json" },
+    "wallet": { "type": "relation", "relation": "manyToOne", "target": "api::wallet.wallet" }
+  }
+}

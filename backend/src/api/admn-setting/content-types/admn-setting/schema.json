@@ -1,0 +1,61 @@
+{
+  "kind": "singleType",
+  "collectionName": "admn_settings",
+  "info": {
+    "singularName": "admn-setting",
+    "pluralName": "admn-settings",
+    "displayName": "Global Admin Settings"
+  },
+  "options": { "draftAndPublish": true },
+  "attributes": {
+    "fallbackAllowAffiliate": { "type": "boolean", "default": false },
+    "fallbackAllowSelfDelivery": { "type": "boolean", "default": true },
+    "fallbackMinimumAmountBeforeBidType": {
+      "type": "enumeration",
+      "enum": ["percentage", "flatrate"],
+      "default": "percentage"
+    },
+    "fallbackMinimumAmountBeforeBid": { "type": "decimal", "default": 5.0 },
+    "fallbackTimeToAllowBidWinnerToPayInMins": {
+      "type": "integer",
+      "default": 30
+    },
+    "fallbackMaximumTimeBeforeBiddingClosesInMins": {
+      "type": "integer",
+      "default": 1440
+    },
+    "fallbackMinimumBidsBeforeAuctionClose": {
+      "type": "integer",
+      "default": 1
+    },
+    "fallbackBidExtensionTriggerWindowMins": {
+      "type": "integer",
+      "default": 10
+    },
+    "fallbackMaxSimultaneousBidsPerUser": { "type": "integer", "default": 3 },
+    "fallbackForfeitureSplitSellerPercentage": {
+      "type": "decimal",
+      "default": 50.0
+    },
+    "fallbackCoolDownPeriodAfterForfeitMins": {
+      "type": "integer",
+      "default": 1440
+    },
+    "fallbackAgentCommissionSplitPercentage": {
+      "type": "decimal",
+      "default": 50.0
+    },
+    "fallbackAbsorbPaymentFees": { "type": "boolean", "default": false },
+    "fallbackPaymentGateway": {
+      "type": "enumeration",
+      "enum": ["pawapay", "lenco", "none"],
+      "default": "pawapay"
+    },
+    "fallbackPollIntervalMs": { "type": "integer", "default": 3000 },
+    "prefferedSettingsCurrency": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::currency.currency"
+    }
+  }
+}

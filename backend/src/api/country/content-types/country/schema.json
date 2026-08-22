@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "countries",
+  "info": {
+    "singularName": "country",
+    "pluralName": "countries",
+    "displayName": "Country"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "countryName": { "type": "string", "required": true, "unique": true },
+    "countryCode": { "type": "string", "required": true, "unique": true },
+    "savedPhoneCode": { "type": "string", "required": true },
+    "phoneNumberDigitLenth": { "type": "integer", "required": true, "default": 9 },
+    "cntIsActive": { "type": "boolean", "default": true },
+
+    "allowAffiliate": { "type": "boolean", "default": false },
+    "allowSelfDelivery": { "type": "boolean", "default": true },
+    "minimumAmountBeforeBidType": { "type": "enumeration", "enum": ["percentage", "flatrate"] },
+    "minimumAmountBeforeBid": { "type": "decimal" },
+    "timeToAllowBidWinnerToPayInMins": { "type": "integer" },
+    "maximumTimeBeforeBiddingClosesInMins": { "type": "integer" },
+    "minimumBidsBeforeAuctionClose": { "type": "integer" },
+    "bidExtensionTriggerWindowMins": { "type": "integer" },
+    "maxSimultaneousBidsPerUser": { "type": "integer" },
+    "forfeitureSplitSellerPercentage": { "type": "decimal" },
+    "coolDownPeriodAfterForfeitMins": { "type": "integer" },
+    "agentCommissionSplitPercentage": { "type": "decimal" },
+    "absorbPaymentFees": { "type": "boolean" },
+    "paymentGateway": { "type": "enumeration", "enum": ["pawapay", "lenco", "none"] },
+    "cntPollIntervalMs": { "type": "integer" },
+
+    "currency": { "type": "relation", "relation": "manyToOne", "target": "api::currency.currency" }
+  }
+}

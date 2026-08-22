@@ -1,0 +1,127 @@
+{
+  "kind": "collectionType",
+  "collectionName": "up_users",
+  "info": {
+    "name": "user",
+    "singularName": "user",
+    "pluralName": "users",
+    "displayName": "User",
+    "description": "Extended user"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-type-builder": {
+      "visible": true
+    }
+  },
+  "attributes": {
+    "username": {
+      "type": "string",
+      "minLength": 3,
+      "required": true,
+      "unique": true
+    },
+    "email": {
+      "type": "email",
+      "required": true,
+      "minLength": 6,
+      "unique": true
+    },
+     "usrFullName": { "type": "string" },
+    "usrPhoneNormalized": { "type": "string", "unique": true },
+    "usrEmailOptional": { "type": "email" },
+    "usrKycVerified": { "type": "boolean", "default": false },
+    "usrCoolDownUntil": { "type": "datetime" },
+    "provider": {
+      "type": "string"
+    },
+    "password": {
+      "type": "password",
+      "private": true,
+      "minLength": 6
+    },
+    "resetPasswordToken": {
+      "type": "string",
+      "private": true
+    },
+    "confirmationToken": {
+      "type": "string",
+      "private": true
+    },
+    "confirmed": {
+      "type": "boolean",
+      "default": false
+    },
+    "blocked": {
+      "type": "boolean",
+      "default": false
+    },
+    "role": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.role"
+    },
+    "phoneNumber": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "phoneVerified": {
+      "type": "boolean",
+      "default": false
+    },
+    "firstName": {
+      "type": "string"
+    },
+    "lastName": {
+      "type": "string"
+    },
+    "address": {
+      "type": "text"
+    },
+    "deviceToken": {
+      "type": "string"
+    },
+    "refreshToken": {
+      "type": "string",
+      "private": true
+    },
+    "refreshTokenExpiry": {
+      "type": "datetime"
+    },
+    "sessionExpiry": {
+      "type": "datetime"
+    },
+    "deletedAt": {
+      "type": "datetime"
+    },
+    "devices": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::device.device",
+      "mappedBy": "user"
+    },
+    "activeDevice": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::device.device"
+    },
+   
+    "country": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::country.country"
+    },
+    "userWallet": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::wallet.wallet",
+      "mappedBy": "walletOwner"
+    }
+  }
+}

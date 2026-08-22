@@ -1,0 +1,56 @@
+{
+  "kind": "collectionType",
+  "collectionName": "auction_items",
+  "info": {
+    "singularName": "auction-item",
+    "pluralName": "auction-items",
+    "displayName": "Auction Listing"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "actTitle": { "type": "string", "required": true },
+    "actDescription": { "type": "text" },
+    "actStartingPriceUsd": { "type": "decimal", "required": true },
+    "actCurrentHighestPriceUsd": { "type": "decimal", "default": 0.0 },
+    "actListingTimeStart": { "type": "datetime", "required": true },
+    "actListingTimeEnd": { "type": "datetime", "required": true },
+    "actAuctionStatus": {
+      "type": "enumeration",
+      "enum": [
+        "scheduled",
+        "active",
+        "payment_pending",
+        "sold",
+        "delisted_no_bids",
+        "delisted_forfeited"
+      ],
+      "default": "scheduled"
+    },
+    "actMinBidsRequired": { "type": "integer" },
+    "actDeliveryConfirmationCode": { "type": "string" },
+    "actBuyerConfirmedDelivery": { "type": "boolean", "default": false },
+    "actSellerConfirmedDelivery": { "type": "boolean", "default": false },
+    "actImages": { "type": "media", "multiple": true, "required": true },
+    "seller": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "currentWinningBuyer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "itemOriginCountry": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::country.country"
+    },
+    "bids": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::bid.bid",
+      "mappedBy": "auctionItem"
+    }
+  }
+}

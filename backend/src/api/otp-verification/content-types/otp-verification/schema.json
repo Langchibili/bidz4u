@@ -1,0 +1,13 @@
+{
+  "kind": "collectionType",
+  "collectionName": "otp_verifications",
+  "info": { "singularName": "otp-verification", "pluralName": "otp-verifications", "displayName": "OTP Verification" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "otpPhoneNumber": { "type": "string" },
+    "otpCode": { "type": "string", "required": true },
+    "otpPurpose": { "type": "enumeration", "enum": ["registration", "login"], "default": "login" },
+    "otpExpiresAt": { "type": "datetime", "required": true },
+    "otpAttempts": { "type": "integer", "default": 0 }
+  }
+}

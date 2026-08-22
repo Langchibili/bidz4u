@@ -1,0 +1,18 @@
+{
+  "kind": "collectionType",
+  "collectionName": "currencies",
+  "info": {
+    "singularName": "currency",
+    "pluralName": "currencies",
+    "displayName": "Currency"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "currCode": { "type": "string", "required": true, "unique": true },
+    "currSymbol": { "type": "string", "required": true },
+    "currName": { "type": "string" },
+    "currExchangeRateToUsdCached": { "type": "decimal", "default": 1.0 },
+    "currRateLastUpdatedAt": { "type": "datetime" },
+    "countries": { "type": "relation", "relation": "oneToMany", "target": "api::country.country", "mappedBy": "currency" }
+  }
+}

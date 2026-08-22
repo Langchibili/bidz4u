@@ -1,0 +1,38 @@
+ Basically:
+-I create an account (single account for buying and for selling)
+-I post the thing I want to auction and inform starting price 
+-the system allocates 24hrs (or whatever time we will set) for a bid to be received. If not received the item is delisted and has to be listed again. If received, 10 minutes is given for another bidder to place higher bid. If 10 minutes elapses it means bidder has won. If another bidder comes through then ten minutes for that one also, etc.
+ For you to bid you need to load a minimum of 5% of the starting price into your account which is refundable. Once you win bid you have 30 minutes to load full money into your account which we will hold and only release upon confirmation of receipt. If 30 minutes elapses and the money isn’t loaded the item goes back to bid and you forfeit your deposit.
+Both seller and buyer and will have to confirm delivery and receipt via their accounts for money to be released
+alright boss. will need to add payment gatway as well, lenco is good, but pawapay is better for low rates and so smooth refunds and stuff, and an escrow account for holding money and allowing cash release on item reception
+I shall finish setting up our pawapay for vector, I had began it's setup previously, they requested some other documents which I shall forward to you, if any are not available, we shall state so, and if application takes long, we shall utilize the okra one
+I want an auction site where people can list items and other people can bid on them within a specific period of time
+
+blidz4u.com project
+bids on items job
+blue, deep blue, gold
+nextjs, strapi backend(mysqli), sockets
+
+i want a marketing system for the app in which a user can earn from a bid transaction by splitting the comission with us, etc
+
+
+So here's the thing, firstly, for the mvp, skip the cdn usage for auction system, but let us stick to web sockets and a fall back mechanic of pollng controlled by settings from the backend in terms of the interval of the polls
+
+and as far as some important starpi content types will be admin settings(admn_settings), country, currency(linked to country) 
+
+admn_settings instead of admin settings to not conflict with the existing admin settings entity in strapi, same for all the other property name which would conflict with the existing property names like status, should be named something  like for example bidStatus for bid content type, something like bid.bidStatus, this is very important, do this for eveything else
+
+in the country entry, there shall be all the country specific settings like 
+
+allowAffiliate(defult as false), allowSelfDelivery(default as true),minimumAmountBeforeBidType(numeration of ether percentage or flatrate) and a minimumAmountBeforeBid(a value, of which should be treated as either be a percentage or flat rate dependent on the minimumAmountBeforeBidType) - that is for the amount of money a user must have in their wallet before they can set a bid, timeToAllowBidWinnerToPayInMins(this will be the amount of time in mnutes to allow for a winner of a bid to pay the rest of the money )
+
+settings like like paymentGateway should be set, ane enumeration, wher gateways like pawapay or lenco, etc, shall be chosen from, if set, that gateway must be used, and in the code there shall be implementation of it
+
+now, in admn settings all those settings must all be there, but when a user's country has been set during a user's signing in into the system, their country's settings must take precendence if set, if not, a particular setting must be referenced from admn settings
+
+all prices that are in the general settings, like the flaterate or any of those must respect the currency set on the setting prefferedSettingsCurrency(a relation to the currency content type, which in the frontend, if not set must be defaulted as zambian kwacha), this one will be the currency each  setting shall be assumed as, like the minimumAmountBeforeBid, but if a user is in an international country, a country international to the country's currency that has been set, the currency must be converted to the currency of the user's country, such that that user may use their currency equivalent to pay, this is the same for all amounts, even bid amounts, must be converted via a public currency conversion api(https://v6.exchangerate-api.com)
+
+when a user is authentication, a user must select their country from the array of countres loaded from the countries entry, and must set their names and enter a phone number and email address(optional) - email address should be optional, in that a user must actually be made to understand that they may leave it black if they want, but a user shall be sent an otp to their phone number, they must authenticate the otp, the strapi's identifier must be set to the user's phone number, a phone number which must be of a nature <countrycode, without the +, country code obtained from the country they selected's countryCode property>phone digits, and as such the user 
+
+
+

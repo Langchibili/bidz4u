@@ -1,0 +1,19 @@
+{
+  "kind": "collectionType",
+  "collectionName": "bids",
+  "info": { "singularName": "bid", "pluralName": "bids", "displayName": "Bid" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "bidAmountUsd": { "type": "decimal", "required": true },
+    "bidAmountLocalSnapshot": { "type": "decimal", "required": true },
+    "bidLocalCurrencyCode": { "type": "string", "required": true },
+    "bidSecuredDepositHeld": { "type": "decimal", "required": true },
+    "bidStatus": {
+      "type": "enumeration",
+      "enum": ["active_leading", "outbid_refunded", "won_complete", "won_forfeited"],
+      "default": "active_leading"
+    },
+    "bidder": { "type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user" },
+    "auctionItem": { "type": "relation", "relation": "manyToOne", "target": "api::auction-item.auction-item", "inversedBy": "bids" }
+  }
+}
