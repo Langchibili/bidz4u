@@ -40,6 +40,10 @@ export const authAPI = {
       lastName,
       phoneNumber,
       email: email || undefined,
+      // Numeric on purpose — /user-registration/register's controller does
+      // `strapi.db.query('api::country.country').findOne({ where: { id:
+      // countryId } })`, the raw Query Engine, not the Document Service.
+      // See UIDTYPE_AUDIT.md.
       countryId: country?.id,
     });
 
@@ -62,6 +66,19 @@ export const authAPI = {
     const response = await apiClient.post('/auth-otp/verify', { phoneNumber, otp, purpose });
 
     if (response?.status && response?.jwt) {
+      // Sanity check right at the source: a real JWT is a plain string. If
+      // this ever fires, the bug is server-side — the /auth-otp/verify
+      // controller's `jwt` value isn't a plain signed string (e.g. it wasn't
+      // awaited if `jwt.issue()` is async in your Strapi version, or it's
+      // wrapped in an object). apiClient.setToken() also guards against
+      // this, but logging here pinpoints the exact response that caused it.
+      if (typeof response.jwt !== 'string') {
+        console.error(
+          '/auth-otp/verify returned a non-string `jwt` — check the backend ' +
+            'otp-verification.verify controller. Received response.jwt:',
+          response.jwt
+        );
+      }
       apiClient.setToken(response.jwt);
       if (typeof window !== 'undefined' && response.user) {
         localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(response.user));

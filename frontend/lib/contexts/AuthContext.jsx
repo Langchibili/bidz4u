@@ -77,6 +77,12 @@ export function AuthProvider({ children }) {
       phoneNumberDigitLenth: chosenCountry.phoneNumberDigitLenth || 9,
       savedCurrencyCode: chosenCountry.currency?.currCode || chosenCountry.currency?.code || GLOBAL_DEFAULTS.FALLBACK_CURRENCY_CODE,
       savedCurrencySymbol: chosenCountry.currency?.currSymbol || chosenCountry.currency?.symbol || GLOBAL_DEFAULTS.FALLBACK_CURRENCY_SYMBOL,
+      // Deliberately NOT apiClient.resolveId(chosenCountry) — both consumers
+      // of this countryId (GET /countries/:id/effective-settings, which does
+      // `Number(id)` server-side, and POST /user-registration/register's
+      // `countryId`, which does a raw `db.query(...).findOne({ where: { id
+      // } })`) require the NUMERIC id. `Number(documentId)` would be NaN.
+      // See UIDTYPE_AUDIT.md.
       countryId: chosenCountry.id,
     };
     if (typeof window !== 'undefined') {

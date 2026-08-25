@@ -572,7 +572,7 @@ export interface ApiAuctionItemAuctionItem extends Struct.CollectionTypeSchema {
       Schema.Attribute.DefaultTo<'scheduled'>;
     actBuyerConfirmedDelivery: Schema.Attribute.Boolean &
       Schema.Attribute.DefaultTo<false>;
-    actCurrentHighestPriceUsd: Schema.Attribute.Decimal &
+    actCurrentHighestPriceNative: Schema.Attribute.Decimal &
       Schema.Attribute.DefaultTo<0>;
     actDeliveryConfirmationCode: Schema.Attribute.String;
     actDescription: Schema.Attribute.Text;
@@ -580,11 +580,13 @@ export interface ApiAuctionItemAuctionItem extends Struct.CollectionTypeSchema {
       Schema.Attribute.Required;
     actListingTimeEnd: Schema.Attribute.DateTime & Schema.Attribute.Required;
     actListingTimeStart: Schema.Attribute.DateTime & Schema.Attribute.Required;
-    actMinBidsRequired: Schema.Attribute.Integer;
+    actNativeCurrencyCode: Schema.Attribute.String & Schema.Attribute.Required;
     actSellerConfirmedDelivery: Schema.Attribute.Boolean &
       Schema.Attribute.DefaultTo<false>;
-    actStartingPriceUsd: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    actStartingPriceNative: Schema.Attribute.Decimal &
+      Schema.Attribute.Required;
     actTitle: Schema.Attribute.String & Schema.Attribute.Required;
+    actTown: Schema.Attribute.String;
     bids: Schema.Attribute.Relation<'oneToMany', 'api::bid.bid'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -814,6 +816,7 @@ export interface ApiCountryCountry extends Struct.CollectionTypeSchema {
     publishedAt: Schema.Attribute.DateTime;
     savedPhoneCode: Schema.Attribute.String & Schema.Attribute.Required;
     timeToAllowBidWinnerToPayInMins: Schema.Attribute.Integer;
+    towns: Schema.Attribute.JSON;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;

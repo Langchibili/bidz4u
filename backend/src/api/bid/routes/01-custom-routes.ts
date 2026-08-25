@@ -4,13 +4,13 @@ export default {
       method: "POST",
       path: "/bids/place",
       handler: "bid.place",
-      config: { auth: {} },
+      config: { policies: [], middlewares: [] },
     },
     {
       method: "GET",
       path: "/bids/me",
       handler: "bid.myBids",
-      config: { auth: {} },
+      config: { policies: [], middlewares: [] },
     },
   ],
 };

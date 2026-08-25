@@ -24,43 +24,81 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
 
       const auctionItem = await strapi.db.query('api::auction-item.auction-item').findOne({
         where: { id: auctionItemId },
-        populate: { itemOriginCountry: { populate: ['currency'] } },
       });
       if (!auctionItem) return ctx.notFound('Auction item not found');
       if (auctionItem.actAuctionStatus !== 'active') return ctx.badRequest('Auction is not active');
+
+      const auctionCurrency = auctionItem.actNativeCurrencyCode;
 
       const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
         where: { id: user.id },
         populate: { country: { populate: ['currency'] }, userWallet: true },
       });
 
-      const settings = await resolveSettingsForCountry(strapi, fullUser.country?.id);
-      const userCurrency = fullUser.country?.currency?.currCode || settings._settingsBaseCurrency;
+      const userCurrency = fullUser.country?.currency?.currCode;
+      if (!userCurrency) return ctx.badRequest('Your account has no country/currency set — please update your profile');
 
-      const bidAmountUsd = await convertAmount(Number(bidAmountLocal), userCurrency, 'USD');
-      if (bidAmountUsd <= Number(auctionItem.actCurrentHighestPriceUsd)) {
+      const settings = await resolveSettingsForCountry(strapi, fullUser.country?.id);
+
+      // ── Convert bid amount into the auction's native currency, ONLY if
+      //    the bidder's currency differs from the auction's currency. ────────
+      let bidAmountNative: number;
+      let bidWasConverted = false;
+      try {
+        if (userCurrency === auctionCurrency) {
+          bidAmountNative = Number(bidAmountLocal);
+        } else {
+          bidAmountNative = await convertAmount(Number(bidAmountLocal), userCurrency, auctionCurrency);
+          bidWasConverted = true;
+        }
+      } catch (conversionErr: any) {
+        strapi.log.error('[bid.place] Currency conversion failed:', conversionErr.message);
+        return ctx.badRequest('Currency conversion is temporarily unavailable. Please try again shortly.');
+      }
+
+      if (bidAmountNative <= Number(auctionItem.actCurrentHighestPriceNative)) {
         return ctx.badRequest('Bid must exceed the current highest bid');
       }
 
-      const basePrice = Number(auctionItem.actStartingPriceUsd);
-      const minRequiredUsd = settings.minimumAmountBeforeBidType === 'percentage'
-        ? basePrice * (Number(settings.minimumAmountBeforeBid) / 100)
-        : await convertAmount(Number(settings.minimumAmountBeforeBid), settings._settingsBaseCurrency, 'USD');
+      // ── Minimum wallet balance check — also done in the auction's native
+      //    currency, so both the settings value and the wallet balance get
+      //    converted into that currency ONLY if their source currency differs. ─
+      let minRequiredNative: number;
+      let walletBalanceNative: number;
+      try {
+        const basePrice = Number(auctionItem.actStartingPriceNative);
 
-      const walletBalanceUsd = await convertAmount(
-        Number(fullUser.userWallet?.wltAvailableBalance || 0),
-        fullUser.userWallet?.wltCurrencyCode || userCurrency,
-        'USD'
-      );
-      if (walletBalanceUsd < minRequiredUsd) {
-        return ctx.badRequest(`Minimum wallet balance of ${minRequiredUsd.toFixed(2)} USD equivalent required before bidding`);
+        if (settings.minimumAmountBeforeBidType === 'percentage') {
+          // Percentage of the (already native-currency) starting price — no conversion needed ever.
+          minRequiredNative = basePrice * (Number(settings.minimumAmountBeforeBid) / 100);
+        } else {
+          const settingsCurrency = settings._minimumAmountBeforeBidCurrency;
+          minRequiredNative = settingsCurrency === auctionCurrency
+            ? Number(settings.minimumAmountBeforeBid)
+            : await convertAmount(Number(settings.minimumAmountBeforeBid), settingsCurrency, auctionCurrency);
+        }
+
+        const walletCurrency = fullUser.userWallet?.wltCurrencyCode || userCurrency;
+        const walletBalance = Number(fullUser.userWallet?.wltAvailableBalance || 0);
+        walletBalanceNative = walletCurrency === auctionCurrency
+          ? walletBalance
+          : await convertAmount(walletBalance, walletCurrency, auctionCurrency);
+      } catch (conversionErr: any) {
+        strapi.log.error('[bid.place] Currency conversion failed (minimum balance check):', conversionErr.message);
+        return ctx.badRequest('Currency conversion is temporarily unavailable. Please try again shortly.');
+      }
+
+      if (walletBalanceNative < minRequiredNative) {
+        return ctx.badRequest(`Minimum wallet balance of ${minRequiredNative.toFixed(2)} ${auctionCurrency} equivalent required before bidding`);
       }
 
       const bid = await strapi.db.query('api::bid.bid').create({
         data: {
-          bidAmountUsd,
+          bidAmountNative,
+          bidNativeCurrencyCode: auctionCurrency,
           bidAmountLocalSnapshot: bidAmountLocal,
           bidLocalCurrencyCode: userCurrency,
+          bidWasConverted,
           bidSecuredDepositHeld: 0,
           bidStatus: 'active_leading',
           bidder: user.id,
@@ -68,14 +106,25 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
         },
       });
 
-      await strapi.db.query('api::bid.bid').updateMany({
+      // ── Mark previous leading bid(s) as outbid ───────────────────────────
+      // Resolve target ids with a plain findMany first, then updateMany on a
+      // scalar `id: { $in }` filter only — mixing a relation filter with $ne
+      // directly inside updateMany's `where` crashes Strapi's query builder.
+      const previousLeadingBids = await strapi.db.query('api::bid.bid').findMany({
         where: { auctionItem: auctionItem.id, bidStatus: 'active_leading', id: { $ne: bid.id } },
-        data: { bidStatus: 'outbid_refunded' },
+        select: ['id'],
       });
+
+      if (previousLeadingBids.length > 0) {
+        await strapi.db.query('api::bid.bid').updateMany({
+          where: { id: { $in: previousLeadingBids.map((b) => b.id) } },
+          data: { bidStatus: 'outbid_refunded' },
+        });
+      }
 
       await strapi.db.query('api::auction-item.auction-item').update({
         where: { id: auctionItem.id },
-        data: { actCurrentHighestPriceUsd: bidAmountUsd, currentWinningBuyer: user.id },
+        data: { actCurrentHighestPriceNative: bidAmountNative, currentWinningBuyer: user.id },
       });
 
       const now = Date.now();
@@ -93,14 +142,16 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
       socketService.emitBidPlaced(auctionItem.id, {
         bidId: bid.id,
         bidderId: user.id,
-        bidAmountUsd,
+        bidAmountNative,
+        bidNativeCurrencyCode: auctionCurrency,
         bidAmountLocalSnapshot: bidAmountLocal,
         bidLocalCurrencyCode: userCurrency,
+        bidWasConverted,
       });
 
       ctx.send({ status: true, bid });
-    } catch (error) {
-      console.error('Error placing bid:', error);
+    } catch (error: any) {
+      strapi.log.error('[bid.place] Error placing bid:', error);
       ctx.internalServerError('Failed to place bid');
     }
   },

@@ -220,7 +220,7 @@ export default function WalletPage() {
       <Stack spacing={1}>
         {transactions.map((tx) => (
           <Box
-            key={tx.id}
+            key={apiClient.resolveId(tx)}
             sx={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               p: 1.5, borderRadius: 2, bgcolor: 'background.paper',

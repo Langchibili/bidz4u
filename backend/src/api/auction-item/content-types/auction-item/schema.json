@@ -10,8 +10,9 @@
   "attributes": {
     "actTitle": { "type": "string", "required": true },
     "actDescription": { "type": "text" },
-    "actStartingPriceUsd": { "type": "decimal", "required": true },
-    "actCurrentHighestPriceUsd": { "type": "decimal", "default": 0.0 },
+    "actStartingPriceNative": { "type": "decimal", "required": true },
+    "actCurrentHighestPriceNative": { "type": "decimal", "default": 0.0 },
+    "actNativeCurrencyCode": { "type": "string", "required": true },
     "actListingTimeStart": { "type": "datetime", "required": true },
     "actListingTimeEnd": { "type": "datetime", "required": true },
     "actAuctionStatus": {
@@ -26,7 +27,6 @@
       ],
       "default": "scheduled"
     },
-    "actMinBidsRequired": { "type": "integer" },
     "actDeliveryConfirmationCode": { "type": "string" },
     "actBuyerConfirmedDelivery": { "type": "boolean", "default": false },
     "actSellerConfirmedDelivery": { "type": "boolean", "default": false },
@@ -51,6 +51,7 @@
       "relation": "oneToMany",
       "target": "api::bid.bid",
       "mappedBy": "auctionItem"
-    }
+    },
+    "actTown": { "type": "string" }
   }
 }

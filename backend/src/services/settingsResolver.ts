@@ -1,8 +1,12 @@
-// backend/src/services/settingsResolver.ts
-
 /**
  * Resolves an effective settings object for a given country:
  * country-level value wins if non-null, otherwise falls back to admn_settings.
+ *
+ * Money fields need to know WHICH currency they're denominated in, since a
+ * country override is assumed to be in that country's own currency, while an
+ * admn_settings fallback is in admn_settings.prefferedSettingsCurrency. Only
+ * `minimumAmountBeforeBid` is a money field among the resolved settings —
+ * everything else is a boolean, enum, percentage, or duration in minutes.
  */
 
 const FIELD_MAP: Record<string, string> = {
@@ -44,9 +48,17 @@ export async function resolveSettingsForCountry(strapi: any, countryId?: number 
       : admnSettings?.[admnField];
   }
 
-  resolved._settingsBaseCurrency = admnSettings?.prefferedSettingsCurrency?.currCode || 'ZMW';
-  resolved._userCurrency = country?.currency?.currCode || resolved._settingsBaseCurrency;
+  const settingsBaseCurrency = admnSettings?.prefferedSettingsCurrency?.currCode || 'ZMW';
+  const userCurrency = country?.currency?.currCode || settingsBaseCurrency;
+
+  resolved._settingsBaseCurrency = settingsBaseCurrency;
+  resolved._userCurrency = userCurrency;
   resolved._pollIntervalMs = resolved.cntPollIntervalMs;
+
+  // minimumAmountBeforeBid is denominated in the country's currency if the
+  // country overrode it, otherwise in admn_settings.prefferedSettingsCurrency.
+  const minimumAmountCameFromCountry = country?.minimumAmountBeforeBid !== null && country?.minimumAmountBeforeBid !== undefined;
+  resolved._minimumAmountBeforeBidCurrency = minimumAmountCameFromCountry ? userCurrency : settingsBaseCurrency;
 
   return resolved;
 }

@@ -72,7 +72,7 @@ export default factories.createCoreController('api::otp-verification.otp-verific
         return ctx.badRequest('Complete registration before verifying a new signup');
       }
 
-      const jwt = strapi.plugin('users-permissions').service('jwt').issue({ id: user.id });
+      const jwt = await strapi.plugin('users-permissions').service('jwt').issue({ id: user.id });
       ctx.send({ status: true, jwt, user } as VerifyOtpResponse);
     } catch (error) {
       console.error('Error verifying OTP:', error);

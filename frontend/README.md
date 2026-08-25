@@ -162,3 +162,85 @@ a comment at the top of the relevant file too):
 6. **Upload permission.** `/sell`'s image upload calls `POST /upload`
    directly — the "authenticated" role needs Upload permission enabled in
    Strapi admin, same caveat as #2.
+
+## Fixing the 403s (`/wallets/me`, `/transactions/me`, `/bids/me`, etc.)
+
+`config: { auth: {} }` on a custom Strapi route only means **"a valid JWT is
+required"** — it does **not** grant permission to call that action. Strapi's
+Users & Permissions plugin separately checks a per-action checkbox for
+*every* controller method, including custom ones, and content-type CRUD
+default (find/create/update/delete) does **not** auto-enable custom methods.
+
+To fix, in the Strapi admin: **Settings → Users & Permissions Plugin →
+Roles → Authenticated**, then under each content type, enable these
+specific action checkboxes (not just the default find/create ones):
+
+- **Wallet** → `myWallet`
+- **Transaction** → `myTransactions`, `initiateDeposit`
+- **Bid** → `myBids`, `place`
+- **Auction-item** → `lightweightStatus`, `confirmDelivery`
+- **Commission-ledger** → `myEarnings`
+- **Affiliate-link** → `create`, `trackClick`
+- **Bidz4upay** → `initiate`, `getPaymentStatus`, `requestWithdrawal`
+
+Save, then retry — no code change needed for this part, it's purely an
+admin-panel permission toggle per role.
+
+## `uidType` — `id` vs `documentId`, propagated app-wide
+
+`apiClient.get/post/put/delete` now all take a **final `uidType` parameter**
+(default `'documentId'`), and `apiClient.resolveId(entity, uidType)` is the
+single place every file resolves an entity's identifier from — no more
+`.id` scattered around. Full breakdown of which backend endpoint needs which
+convention is in **`UIDTYPE_AUDIT.md`** at the project root; short version:
+
+- **Default core routes** (`GET/PUT/DELETE /auction-items/:id`) → Strapi v5's
+  Document Service resolves `:id` as **documentId**. This is why
+  `/auction-items/3` 404'd — plain integers don't resolve there anymore.
+- **Custom controllers using `strapi.db.query(...).findOne({ where: { id } })`**
+  (bid.place, lightweight-status, confirm-delivery, effective-settings,
+  user-registration) bypass the Document Service and need the **numeric
+  id**.
+- **Sockets** (rooms, the polling fallback) are keyed entirely off the
+  numeric id server-side — always pass `apiClient.resolveId(entity, 'id')`
+  into `useSocket()`.
+
+Every place this matters now has an inline comment pointing back to
+`UIDTYPE_AUDIT.md` explaining the specific override. The auction detail page
+is the trickiest case — it fetches the item by **documentId** (matches its
+own URL) but then extracts `apiClient.resolveId(item, 'id')` separately for
+the socket connection and the bid-placement call, since those two need the
+numeric id from the very same object.
+
+## Town selection on `/sell`
+
+`country.towns` (JSON field) now drives a Town `<select>` on the listing
+form. A few things worth knowing:
+
+1. **`auction-item` has no field to store the selected town.** I couldn't
+   find one in any schema you've shared. The Sell page sends `actTown` in
+   the create payload anyway, and both `AuctionCard` (feed) and the auction
+   detail page already render `item.actTown` when present (with a `PlaceIcon`)
+   — Strapi silently drops attributes it doesn't recognize rather than
+   erroring, so nothing breaks today, but the field will stay blank
+   everywhere until you add something like
+   `"actTown": { "type": "string" }` to `auction-item`'s `schema.json`.
+   Once you add it, no frontend change is needed — the feed/detail queries
+   don't restrict fields, so `actTown` starts flowing through automatically.
+2. **The JSON shape of `towns` isn't pinned down by the schema** (`json`
+   accepts anything), so `normalizeTowns()` in `app/sell/page.jsx` handles a
+   few likely shapes — a plain array of strings, or an array of objects with
+   a `name`/`townName`/`town`/`label` key. If your actual data doesn't match
+   any of those, that one function is the only place to adjust.
+3. **New permission needed:** the towns fetch calls `GET /countries` (list
+   `find`, filtered by id) **while already authenticated**, unlike the
+   country dropdown on `/login` and `/signup` which runs before login as the
+   **Public** role. If `Country → find` is only enabled for Public and not
+   for Authenticated in Strapi admin, this will 403 the same way
+   `/bids/place` did — add it to the same permissions pass described above.
+4. This deliberately queries `GET /countries?filters[id][$eq]=...` (a list
+   query) rather than the default core `GET /countries/:id` — the latter
+   resolves `:id` as documentId in v5, and `countryConfig` only ever caches
+   the country's numeric id. Filtering a list by `filters[id][$eq]` matches
+   on the plain `id` column regardless, sidestepping the documentId question
+   entirely. See `UIDTYPE_AUDIT.md`.

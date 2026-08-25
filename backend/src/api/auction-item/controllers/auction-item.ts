@@ -1,12 +1,47 @@
 import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::auction-item.auction-item', ({ strapi }) => ({
+  async create(ctx) {
+    try {
+      const userId = ctx.state.user?.id;
+      if (!userId) return ctx.unauthorized('Login required');
+
+      const { itemOriginCountry, actStartingPriceNative, ...rest } = ctx.request.body.data || ctx.request.body;
+      if (!itemOriginCountry) return ctx.badRequest('itemOriginCountry is required');
+      if (!actStartingPriceNative || actStartingPriceNative <= 0) return ctx.badRequest('actStartingPriceNative must be a positive number');
+
+      const country = await strapi.db.query('api::country.country').findOne({
+        where: { id: itemOriginCountry },
+        populate: ['currency'],
+      });
+      if (!country) return ctx.badRequest('Invalid itemOriginCountry');
+      if (!country.currency?.currCode) return ctx.badRequest('Selected country has no currency configured');
+
+      const entity = await strapi.service('api::auction-item.auction-item').create({
+        data: {
+          ...rest,
+          itemOriginCountry,
+          actStartingPriceNative,
+          actCurrentHighestPriceNative: actStartingPriceNative,
+          actNativeCurrencyCode: country.currency.currCode,
+          seller: userId,
+        },
+      });
+
+      const sanitizedEntity = (await this?.sanitizeOutput?.(entity, ctx)) ?? entity;
+      return this?.transformResponse?.(sanitizedEntity) ?? { data: sanitizedEntity };
+    } catch (error) {
+      console.error('Error creating auction item:', error);
+      ctx.internalServerError('Failed to create auction item');
+    }
+  },
+
   async lightweightStatus(ctx) {
     try {
       const { id } = ctx.params;
       const item = await strapi.db.query('api::auction-item.auction-item').findOne({
         where: { id },
-        select: ['id', 'actCurrentHighestPriceUsd', 'actAuctionStatus', 'actListingTimeEnd'],
+        select: ['id', 'actCurrentHighestPriceNative', 'actNativeCurrencyCode', 'actAuctionStatus', 'actListingTimeEnd'],
       });
       if (!item) return ctx.notFound();
       ctx.send(item);

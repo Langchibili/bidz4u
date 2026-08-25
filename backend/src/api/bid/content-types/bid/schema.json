@@ -1,13 +1,15 @@
 {
   "kind": "collectionType",
   "collectionName": "bids",
-  "info": { "singularName": "bid", "pluralName": "bids", "displayName": "Bid" },
+  "info": { "singularName": "bid", "pluralName": "bids", "displayName": "Auction Bid Log" },
   "options": { "draftAndPublish": false },
   "attributes": {
-    "bidAmountUsd": { "type": "decimal", "required": true },
+    "bidAmountNative": { "type": "decimal", "required": true },
+    "bidNativeCurrencyCode": { "type": "string", "required": true },
     "bidAmountLocalSnapshot": { "type": "decimal", "required": true },
     "bidLocalCurrencyCode": { "type": "string", "required": true },
     "bidSecuredDepositHeld": { "type": "decimal", "required": true },
+    "bidWasConverted": { "type": "boolean", "default": false },
     "bidStatus": {
       "type": "enumeration",
       "enum": ["active_leading", "outbid_refunded", "won_complete", "won_forfeited"],
