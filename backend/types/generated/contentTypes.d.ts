@@ -481,6 +481,8 @@ export interface ApiAdmnSettingAdmnSetting extends Struct.SingleTypeSchema {
       ['percentage', 'flatrate']
     > &
       Schema.Attribute.DefaultTo<'percentage'>;
+    fallbackMinimumAuctionStartingPrice: Schema.Attribute.Decimal &
+      Schema.Attribute.DefaultTo<10>;
     fallbackMinimumBidsBeforeAuctionClose: Schema.Attribute.Integer &
       Schema.Attribute.DefaultTo<1>;
     fallbackPaymentGateway: Schema.Attribute.Enumeration<
@@ -576,8 +578,8 @@ export interface ApiAuctionItemAuctionItem extends Struct.CollectionTypeSchema {
       Schema.Attribute.DefaultTo<0>;
     actDeliveryConfirmationCode: Schema.Attribute.String;
     actDescription: Schema.Attribute.Text;
-    actImages: Schema.Attribute.Media<undefined, true> &
-      Schema.Attribute.Required;
+    actImages: Schema.Attribute.Media<undefined, true>;
+    actIsDraft: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     actListingTimeEnd: Schema.Attribute.DateTime & Schema.Attribute.Required;
     actListingTimeStart: Schema.Attribute.DateTime & Schema.Attribute.Required;
     actNativeCurrencyCode: Schema.Attribute.String & Schema.Attribute.Required;
@@ -619,7 +621,7 @@ export interface ApiAuctionItemAuctionItem extends Struct.CollectionTypeSchema {
 export interface ApiBidBid extends Struct.CollectionTypeSchema {
   collectionName: 'bids';
   info: {
-    displayName: 'Bid';
+    displayName: 'Auction Bid Log';
     pluralName: 'bids';
     singularName: 'bid';
   };
@@ -633,17 +635,20 @@ export interface ApiBidBid extends Struct.CollectionTypeSchema {
     >;
     bidAmountLocalSnapshot: Schema.Attribute.Decimal &
       Schema.Attribute.Required;
-    bidAmountUsd: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    bidAmountNative: Schema.Attribute.Decimal & Schema.Attribute.Required;
     bidder: Schema.Attribute.Relation<
       'manyToOne',
       'plugin::users-permissions.user'
     >;
     bidLocalCurrencyCode: Schema.Attribute.String & Schema.Attribute.Required;
+    bidNativeCurrencyCode: Schema.Attribute.String & Schema.Attribute.Required;
     bidSecuredDepositHeld: Schema.Attribute.Decimal & Schema.Attribute.Required;
     bidStatus: Schema.Attribute.Enumeration<
       ['active_leading', 'outbid_refunded', 'won_complete', 'won_forfeited']
     > &
       Schema.Attribute.DefaultTo<'active_leading'>;
+    bidWasConverted: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -808,6 +813,8 @@ export interface ApiCountryCountry extends Struct.CollectionTypeSchema {
     minimumAmountBeforeBidType: Schema.Attribute.Enumeration<
       ['percentage', 'flatrate']
     >;
+    minimumAuctionStartingPrice: Schema.Attribute.Decimal &
+      Schema.Attribute.DefaultTo<10>;
     minimumBidsBeforeAuctionClose: Schema.Attribute.Integer;
     paymentGateway: Schema.Attribute.Enumeration<['pawapay', 'lenco', 'none']>;
     phoneNumberDigitLenth: Schema.Attribute.Integer &

@@ -77,7 +77,9 @@ already cached rather than hitting the network again.
 - `useSocket(auctionItemId, { userId })` — connects to `/main-sockets`,
   listens for `bid:placed`, `auction:extended`, `auction:closed`,
   `bid:forfeited`; falls back to polling
-  `GET /auction-items/:id/lightweight-status` on `connect_error`.
+  `GET /auction-items/:id/lightweight-status` on `connect_error`. Returns
+  both `livePrice` and `liveCurrencyCode` — see the currency-model section
+  below for why both matter now.
 - `useAuctionTimer(endTime)` — independent countdown, resets automatically
   when `auction:extended` updates `endTime`.
 - Placing a bid is a plain `POST /bids/place` — the bidder's own update
@@ -131,15 +133,13 @@ a comment at the top of the relevant file too):
    every visible item. If the feed grows, add a maintained
    `actBidCount: integer` field (incremented in `bid.place`) instead.
 
-2. **`auction-item` has no custom create controller.** It's Strapi's default
-   `factories.createCoreRouter`, which means:
-   - `seller` is **not** auto-set to the logged-in user — the Sell page sends
-     `seller: user.id` itself, which a modified client could spoof. You'll
-     want a custom `create` override that forces
-     `seller: ctx.state.user.id` server-side before this is exposed publicly.
-   - The "authenticated" role needs **Create** permission enabled on
-     auction-item in Strapi admin (Settings → Users & Permissions → Roles) —
-     that's an admin-panel toggle, not something in any file you've shared.
+2. **RESOLVED — `auction-item` now has a custom `create` controller.**
+   `seller` is forced to `ctx.state.user.id` server-side; the Sell page no
+   longer sends `seller` at all, and a modified client can't spoof it
+   anymore. The controller still uses the same **Create** permission-matrix
+   entry as before (overriding a core action keeps its name), so that
+   admin-panel toggle is still required — just no longer a spoofing risk on
+   top of it.
 
 3. **No listing moderation/approval workflow.** `actAuctionStatus` has no
    "pending_review" value, so `/sell` sets new listings straight to
@@ -162,6 +162,40 @@ a comment at the top of the relevant file too):
 6. **Upload permission.** `/sell`'s image upload calls `POST /upload`
    directly — the "authenticated" role needs Upload permission enabled in
    Strapi admin, same caveat as #2.
+
+## Fixed: sockets not updating (currency model migration)
+
+`auction-item` and `bid` moved from flat USD-denominated amounts to a
+per-item "native currency" model: every listing is now priced in whichever
+country it was listed in (`actNativeCurrencyCode`, computed automatically
+from `itemOriginCountry`), and bids convert the bidder's own local currency
+into that native currency server-side (`bidAmountNative`/
+`bidNativeCurrencyCode`), only actually converting when the two currencies
+differ (`bidWasConverted`).
+
+**This is what broke real-time updates.** `bid.place` started emitting
+`bidAmountNative` instead of the old `bidAmountUsd`, and the
+`lightweight-status` polling fallback started returning
+`actCurrentHighestPriceNative`/`actNativeCurrencyCode` instead of
+`actCurrentHighestPriceUsd` — but `lib/hooks/useSocket.jsx` was still
+reading the old field names. `setLivePrice(data.bidAmountUsd)` was
+silently receiving `undefined` on every single bid (the field just doesn't
+exist in the payload anymore), and the auction page's
+`livePrice ?? item.actCurrentHighestPriceNative` fallback then quietly kept
+showing the stale pre-bid price — no error anywhere, it just looked frozen.
+Both `useSocket`'s live-bid handler and its polling fallback now read the
+correct fields, and the hook also tracks `liveCurrencyCode` alongside
+`livePrice` since a price without its currency is meaningless in this model.
+
+**Everywhere a price is displayed now sources its currency from the item
+itself, not the viewer.** `AuctionCard`, the auction detail page's current-
+bid display, and `/my-bids` (using each bid's own `bidLocalCurrencyCode`,
+not the viewer's *current* country) all changed for this reason — a listing
+from Kenya shown to a bidder in Zambia should read "KES 6,000", not silently
+relabel that amount as Kwacha. The one place the viewer's *own* currency is
+still correct to show is the bid-entry box itself, since `bidAmountLocal` is
+genuinely what they're typing in their own currency — the auction page now
+shows both currencies side by side with a short note when they differ.
 
 ## Fixing the 403s (`/wallets/me`, `/transactions/me`, `/bids/me`, etc.)
 
@@ -214,33 +248,181 @@ numeric id from the very same object.
 
 ## Town selection on `/sell`
 
-`country.towns` (JSON field) now drives a Town `<select>` on the listing
-form. A few things worth knowing:
+`country.towns` (JSON field) drives a Town `<select>` on the listing form,
+now paired with a **Country** selector (defaulting to the seller's own
+account country, but changeable — sellers can list from any country). A few
+things worth knowing:
 
-1. **`auction-item` has no field to store the selected town.** I couldn't
-   find one in any schema you've shared. The Sell page sends `actTown` in
-   the create payload anyway, and both `AuctionCard` (feed) and the auction
-   detail page already render `item.actTown` when present (with a `PlaceIcon`)
-   — Strapi silently drops attributes it doesn't recognize rather than
-   erroring, so nothing breaks today, but the field will stay blank
-   everywhere until you add something like
-   `"actTown": { "type": "string" }` to `auction-item`'s `schema.json`.
-   Once you add it, no frontend change is needed — the feed/detail queries
-   don't restrict fields, so `actTown` starts flowing through automatically.
+1. **RESOLVED — `actTown` now exists on `auction-item`.** `AuctionCard`
+   (feed) and the auction detail page already render `item.actTown` when
+   present (with a `PlaceIcon`) — no frontend change was needed once the
+   field landed, since neither query restricts fields.
 2. **The JSON shape of `towns` isn't pinned down by the schema** (`json`
    accepts anything), so `normalizeTowns()` in `app/sell/page.jsx` handles a
    few likely shapes — a plain array of strings, or an array of objects with
    a `name`/`townName`/`town`/`label` key. If your actual data doesn't match
    any of those, that one function is the only place to adjust.
-3. **New permission needed:** the towns fetch calls `GET /countries` (list
-   `find`, filtered by id) **while already authenticated**, unlike the
-   country dropdown on `/login` and `/signup` which runs before login as the
-   **Public** role. If `Country → find` is only enabled for Public and not
-   for Authenticated in Strapi admin, this will 403 the same way
-   `/bids/place` did — add it to the same permissions pass described above.
-4. This deliberately queries `GET /countries?filters[id][$eq]=...` (a list
-   query) rather than the default core `GET /countries/:id` — the latter
-   resolves `:id` as documentId in v5, and `countryConfig` only ever caches
-   the country's numeric id. Filtering a list by `filters[id][$eq]` matches
-   on the plain `id` column regardless, sidestepping the documentId question
-   entirely. See `UIDTYPE_AUDIT.md`.
+3. **No separate towns request anymore.** The Sell page now fetches the
+   full country list once (`GET /countries?populate=currency`, the same
+   call `/login` and `/signup` already make) and reads `towns` straight off
+   whichever country is currently selected — `towns` is a plain scalar
+   field on `country`, so it's already present in that response without any
+   extra query. Changing the Country dropdown re-derives both the town list
+   and the starting-price currency label from the newly selected country,
+   entirely client-side.
+4. **Permission still worth checking:** this call runs **while already
+   authenticated** (unlike the same call on `/login`/`/signup`, which runs
+   as the Public role before login). If `Country → find` is only enabled
+   for Public and not Authenticated in Strapi admin, this will 403 the same
+   way `/bids/place` did — add it to the same permissions pass described
+   above.
+5. **`itemOriginCountry` must be the country's numeric `id`**, not
+   documentId — the new `auction-item.create` controller validates it via
+   `strapi.db.query('api::country.country').findOne({ where: { id } })`,
+   the raw Query Engine. The Country `<select>` in `/sell` already uses
+   `country.id` as its value for exactly this reason, matching the same
+   convention as the `/login` and `/signup` country pickers. See
+   `UIDTYPE_AUDIT.md`.
+
+## Fixed: JWT stored as `[object Object]`
+
+`localStorage.setItem(key, value)` silently coerces `value` to a string —
+so if `response.jwt` from `/auth-otp/verify` is ever an object instead of a
+plain signed string, it gets stored as the literal text `"[object Object]"`
+with zero errors anywhere. `apiClient.setToken()` (`lib/api/client.js`) now
+refuses to store anything that isn't a string, tries to salvage a nested
+`.jwt`/`.token`/`.accessToken` if the value is an object, and logs the raw
+value to the console when it can't. `authAPI.verifyOTP()` (`lib/api/auth.js`)
+also logs the exact response the moment it arrives, so the browser console
+points straight at the cause instead of you discovering it later as a
+malformed `Authorization` header. `apiClient.getToken()` additionally
+self-heals: if it ever reads back the literal strings `"[object Object]"`,
+`"undefined"`, or `"null"` from a previously-corrupted entry, it clears
+them and returns `null` instead of sending garbage as a Bearer token.
+
+**Root cause is server-side**, though: Strapi's
+`strapi.plugin('users-permissions').service('jwt').issue(...)` is
+synchronous and returns a plain string in a standard install — if your
+`otp-verification.verify` controller's `jwt` field isn't a plain string,
+something in that call chain is either not being awaited (if your Strapi
+version's `.issue()` is async) or is getting wrapped in an object before
+`ctx.send(...)`. Add a quick `console.log(typeof jwt, jwt)` right before the
+`ctx.send({ status: true, jwt, user })` line to confirm what's actually
+being sent.
+
+If you clear your existing corrupted `bidz4u_jwt` entry once (via
+`localStorage.removeItem('bidz4u_jwt')` in devtools, or just logging out and
+back in), the new `apiClient.getToken()` guard prevents this from silently
+recurring even if the backend issue isn't fixed yet — you'll just see the
+console error instead of a broken token.
+
+## Draft-first listing creation, autosave, and editing
+
+`/sell` is no longer a single create-and-submit form — it now follows a
+draft lifecycle, matches the `ref`/`refId` image-attach pattern from your
+gigs-app (`components/shared/DocumentUploadCard.jsx`, ported with icons
+swapped from `lucide-react` to `@mui/icons-material` since the former isn't
+a dependency here), and gates editing of already-published listings by
+status.
+
+### How it works
+
+1. On visiting `/sell` (no `?editId=`), the page checks
+   `localStorage.actDraftDocumentId`. If a cached draft still belongs to the
+   user and is still `actIsDraft: true`, it loads straight into the form.
+2. Otherwise, the entire page grays out behind a skeleton while a brand-new
+   draft is created: `POST /auction-items` with `actTitle: 'Untitled'`,
+   `actIsDraft: true`, and placeholder values for every other required
+   field. The moment it's created, both of its ids are cached:
+   - `localStorage.currentActDraftId` → the draft's **numeric** id
+   - `localStorage.actDraftDocumentId` → the draft's **documentId**
+3. Every field edit after that autosaves — debounced ~700ms, batched into
+   one `PUT /auction-items/:documentId` per pause in typing, not one
+   request per keystroke.
+4. **"Publish Listing"** validates (real title, valid price, at least one
+   photo, town selected if the country has any, a future end time), then
+   flips `actIsDraft: false` and `actAuctionStatus: 'active'`, sets
+   `actListingTimeStart` to the actual go-live moment, and clears both
+   localStorage keys.
+
+### ⚠️ Real schema conflict: `actImages` is `required: true`
+
+This flow deliberately creates the draft **before** any image exists — the
+image gets attached afterwards via the upload plugin's `ref`/`refId`
+mechanism, which needs the entry to already exist. The initial create
+payload sends `actImages: []`. If your Strapi instance enforces "required"
+on a media field as "must have at least one item" (many installs do), draft
+creation will fail outright with a validation error. There's no way to
+satisfy "required" and "create-before-the-image-exists" simultaneously — if
+you hit this, relax `actImages` to `required: false` in the schema.
+
+### Image upload — `ref`/`refId`/`field`, not a relation array
+
+`lib/api/uploads.js` mirrors your gigs-app's upload pattern exactly:
+`POST /upload` with the file plus `ref: 'api::auction-item.auction-item'`,
+`refId: <draft's numeric id>`, `field: 'actImages'` — Strapi's upload plugin
+auto-attaches the file to that field directly, no separate `PUT` needed.
+`refId` uses the numeric id (not documentId), consistent with the other
+raw-Query-Engine-adjacent operations in `UIDTYPE_AUDIT.md`, but this
+specific mechanism is genuinely unverified against your exact Strapi
+version — if the upload succeeds but `actImages` never actually gets the
+file, that's the first thing to check.
+
+**Known limitation:** removing the photo (`DocumentUploadCard`'s remove
+button) only clears local UI state — it doesn't call anything to detach or
+delete the file server-side. The old file stays attached in Strapi until
+cleaned up some other way (re-uploading just adds/replaces the preview, it
+doesn't remove the previous one from storage).
+
+### Currency staleness on country change
+
+The custom `auction-item.create` controller auto-computes
+`actNativeCurrencyCode` from `itemOriginCountry` at creation time, but there
+is no equivalent override shown for `update` — the default core `PUT`
+almost certainly does **not** recompute it if `itemOriginCountry` changes on
+an existing draft or listing. To guard against `actNativeCurrencyCode`
+silently going stale, `/sell` explicitly sends it alongside
+`itemOriginCountry` any time the country selection changes, computed
+client-side from the newly selected country's own currency.
+
+### The drafts browser
+
+Below the form (draft mode only): a **"Create New Auction Listing"** button
+and a list of the seller's other drafts (`GET /auction-items` filtered by
+`seller` + `actIsDraft: true`). Clicking a draft in the list swaps both
+localStorage keys and reloads that draft into the form. Per the requested
+ordering rule: if there are more than 2 drafts total, the button renders
+**above** the list; with 2 or fewer, the list renders above the button.
+
+### Editing an existing (published) listing
+
+Reachable via `/sell?editId=<documentId>` — linked from the new **My
+Listings** section on `/profile`. This skips the entire draft-creation
+dance: it fetches that one item, requires the viewer to be its `seller`,
+and requires `actAuctionStatus` to **not** be `active`, `sold`, or
+`payment_pending` (those are excluded because the auction is live, already
+sold, or awaiting a winner's payment — editing any of those out from under
+the process would corrupt in-flight state). Same autosave mechanism as
+draft mode; the primary button reads "Save Changes" and doesn't touch
+`actIsDraft`/`actAuctionStatus`. Sellers **can** change the auction's end
+time here (a new "timeframe"), via the same `actListingTimeEnd`
+`datetime-local` field draft mode uses.
+
+**This status gate is enforced client-side only** — there's no backend
+check shown anywhere that rejects a `PUT` to a live/sold/pending-payment
+auction-item. A modified client could bypass this page entirely and edit a
+live auction directly via the API. If this matters for your launch, add a
+server-side check (a custom `update` override, mirroring the pattern
+`create` already uses) rather than relying on this page alone.
+
+### Drafts excluded from public visibility
+
+`app/page.jsx`'s feed query now explicitly filters
+`filters[actIsDraft][$eq]=false` (on top of the existing
+`actAuctionStatus=active` filter, which already excludes drafts today since
+they default to `'scheduled'` — this is deliberate defense-in-depth, not
+redundant given how easy it'd be for a future status change to slip a draft
+past the status filter alone). The auction detail page also guards directly:
+if a draft is somehow opened via its URL, it shows a
+"finish setting it up" prompt instead of the bidding UI, and offers a button
+that restores it as the active draft and routes back to `/sell`.

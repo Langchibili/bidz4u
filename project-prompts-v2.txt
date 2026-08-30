@@ -1,3 +1,278 @@
+bidz4u.com Comprehensive Project Plan1. UX/UI Design & Frontend SpecificationsThe frontend is built using Next.js (JavaScript/JSX) and Material UI (MUI). It delivers a dense, high-contrast, premium, mobile-first design optimized for responsive viewports with an app-like flow.Color Palette & Visual AnchorsPrimary (Deep Blue): #0A192F — Establishes depth, corporate trust, and security for the escrow dashboard.Secondary (Bright Blue): #172A45 — Used for component surfaces, inner cards, and data container blocks.Accent/Highlight (Gold): #F59E0B or #D97706 — Reserved exclusively for countdown timers, "Place Bid" buttons, active extension status changes, and winning states.Surface / Background: #020C1B (Ultra Deep Blue) — Enhances high-contrast text readability under sunlight and emphasizes shadows.App-Like Tactility & MotionDeep Layering (Shadows): Custom elevation layers using crisp, overlapping CSS filters to give individual auction items an authentic physical-device depth profile:jsboxShadow: '0px 8px 32px rgba(0, 0, 0, 0.5), inset 0px 1px 2px rgba(255, 255, 255, 0.05)'
+Use code with caution.Dense Layout (High Information Density): Minimal margins, small functional icons, compact text blocks, and rapid-scan data panels. Users can see multiple live counters on screen without scrolling.Micro-Animations: Fluid transformations via framer-motion or CSS transitions for live price increments. When a new bid registers over WebSockets, the target element briefly flashes its inner shadow with your Gold color (#F59E0B) before settling back.2. Comprehensive Database & Configuration ArchitectureAll system values default to global single-type parameters (admn_settings), unless explicitly overridden by localized regional instances (country). Property fields are custom-prefixed to prevent namespace collisions within Strapi's internal engines.Strapi Core Models (TypeScript Base)Collection Type: api::country.countrycountryName: String (Unique index; e.g., "Zambia")savedPhoneCode: String (Stored without + prefix; e.g., "260")phoneNumberDigitLenth: Integer (Absolute layout validation metric; e.g., 9)allowAffiliate: Boolean (Default: false)allowSelfDelivery: Boolean (Default: true)minimumAmountBeforeBidType: Enumeration (percentage, flatrate)minimumAmountBeforeBid: Decimal (Applied against active structural mode)timeToAllowBidWinnerToPayInMins: Integer (Direct payment limit parameter)maximumTimeBeforeBiddingClosesInMins: Integer (Baseline listing life window; defaults to 1440)minimumBidsBeforeAuctionClose: Integer (Minimum distinct offers required to seal listing; defaults to 1)bidExtensionTriggerWindowMins: Integer (Controls when a late bid triggers an extension; e.g., final 10 mins)maxSimultaneousBidsPerUser: Integer (Prevents unverified users from locking up multiple auctions)forfeitureSplitSellerPercentage: Decimal (Percentage of the forfeited 5% deposit that goes to the seller)coolDownPeriodAfterForfeitMins: Integer (Minutes a user is blocked from bidding after a forfeit)agentCommissionSplitPercentage: Decimal (Percentage of platform fee shared with the affiliate agent)absorbPaymentFees: Boolean (Determines per country if the platform absorbs mobile money gateway fees)paymentGateway: Enumeration (pawapay, lenco, okra, none)currency: Relation (Many-to-One ──► api::currency.currency)Collection Type: api::currency.currencysavedCurrencyCode: String (ISO Format; e.g., "ZMW", "KES")savedCurrencySymbol: String (Visual glyph asset; e.g., "ZK", "KSh")Single Type: api::admn-setting.admn-settingfallbackAllowAffiliate: Boolean (false)fallbackAllowSelfDelivery: Boolean (true)fallbackMinimumAmountBeforeBidType: Enumeration (percentage)fallbackMinimumAmountBeforeBid: Decimal (5.00)fallbackTimeToAllowBidWinnerToPayInMins: Integer (30)fallbackMaximumTimeBeforeBiddingClosesInMins: Integer (1440)fallbackMinimumBidsBeforeAuctionClose: Integer (1)fallbackBidExtensionTriggerWindowMins: Integer (10)fallbackMaxSimultaneousBidsPerUser: Integer (3)fallbackForfeitureSplitSellerPercentage: Decimal (50.00)fallbackCoolDownPeriodAfterForfeitMins: Integer (1440)fallbackPaymentGateway: Enumeration (pawapay)fallbackPollIntervalMs: Integer (3000 — Fallback execution interval for network drops)prefferedSettingsCurrency: Relation (Many-to-One ──► api::currency.currency; code defaults to ZMW if blank)3. Authentication & Persistent Client State WorkflowSign-In Flow & NormalizationThe login interface queries the API endpoint /api/countries?populate=currency to generate a native-feeling selection dropdown.The user selects their target country and types their active subscriber mobile digits.The client normalizes input length against the database-defined phoneNumberDigitLenth. Any leading zero is dropped.The system converts the final entry into a standardized phone string format: <savedPhoneCode><digits> (e.g., 260971234567). This serves as the unified identifier payload for the transaction.An OTP code is dispatched via SMS. Once verified, Strapi generates a persistent session token.Long-Term Session ManagementTo drastically lower SMS operational overhead costs, the standard token duration is configured for an extended expiration lifespan:JWT Lifespan Strategy: Set within config/plugins.ts to expire in 1 year (31536000s), avoiding repeated identity challenges.localStorage Client State Hydration SchemaUpon successful verification, the frontend saves the selected country configuration profile directly into local browser storage. This ensures the app boots instantly with the correct currency and validation rules without waiting for API configuration responses.json{
+  "savedCountryName": "Zambia",
+  "savedPhoneCode": "260",
+  "phoneNumberDigitLenth": 9,
+  "savedCurrencyCode": "ZMW",
+  "savedCurrencySymbol": "ZK"
+}
+Use code with caution.4. Real-Time Auction & Extension FrameworkThe core bidding architecture enforces strict rule evaluation boundaries:Main Socket Hub: Manages default web app visual updates over standard browsers.Device Socket Hub: Connects devices running a React Native WebView layout, allowing background optimizations or triggering hardware capabilities.Dynamic Polling Fallback: If socket connectivity drops on cellular data lines, the client initiates background data checking loops. The interval timing parameter matches the values configured in fallbackPollIntervalMs.5. Financial Lifecycle & Escrow StrategyBid Pre-requisites Verification: Before allowing a bid, the backend confirms the user's available wallet balance satisfies the minimumAmountBeforeBid (calculated as a flat rate or percentage of the item starting price).Settlement Execution: When the countdown finishes, the winning bidder is granted the duration configured in timeToAllowBidWinnerToPayInMins (typically 30 minutes) to clear the remaining 95% balance.Forfeiture Enforcement: If the winner fails to fund the remaining balance within the required timeframe, their 5% deposit is locked and split according to forfeitureSplitSellerPercentage. The user is temporarily banned based on coolDownPeriodAfterForfeitMins, and the item re-enters active inventory.Escrow Release Engine: Funds are held in platform vaults. Release authorization requires formal delivery receipt confirmations submitted by both the buyer and the vendor.6. MMP (Minimum Marketable Product) EnhancementsTo ensure viral growth, platform longevity, and seamless cross-border operations at official launch, the following features will be built right after the technical core is validated:Viral Marketing & The Commission SystemThe "Bid Agent" Affiliate Model: Users generate unique deep-links for active auctions. If someone wins the auction via that link, the agent splits the platform's commission fee according to the agentCommissionSplitPercentage configuration.One-Click "WhatsApp Status" Generator: A dedicated share button next to the bidding pane auto-generates a perfectly pre-formatted text string to leverage cheap WhatsApp data bundles: "Live Auction on bidz4u! Current Bid: ZK 450. Only 8 mins left! Bid here: [Link]".Affiliate Tier Systems (api::agent-tier): Dynamically bumps an agent's commission split higher if they successfully bring in high volumes of active bidders, turning smartphone users into independent promoters.Pan-African Multi-Currency EngineThe "Base Currency" Framework: Stores all primary auction data in the Strapi backend using a stable baseline currency (like USD). It queries https://exchangerate-api.com every 12 to 24 hours to cache conversion matrices, seamlessly showing local equivalents (KES, NGN, GHS, ZMW) on the frontend depending on the user's localStorage state.Cross-Border Wallet Payouts: Affiliate agents earn splits in the baseline currency. Upon withdrawal requests, Strapi converts the balance and triggers an automated PawaPay disbursement push directly to their local mobile money account.Enhanced Trust & Security ElementsTiered KYC Engine via Okra & Smile ID: Low-value bids require phone number verification via mobile money. High-value auctions (e.g., tech, cars) require national ID verification checks integrated into the Strapi registration stack.Offline Transaction Continuity (USSD Receipt Verification): If a user updates their wallet balance but loses internet during delivery, the backend auto-sends an SMS containing a unique 4-digit token. The buyer hands this code physically to the seller upon item pickup. The seller inputs it when online to release escrow.Haptic Pulse Triggers: Passes JavaScript-to-Native bridge commands through the device socket. When the countdown hits the final 60 seconds, or when a user is outbid, it triggers the phone's native hardware to vibrate softly, creating an intense "deep feeling" atmosphere.7. Step-by-Step Implementation Timeline┌───────────────────────────────────────────────────────────────────────────┐
+│ PHASE 1: STRAPI DATA CORE & AUTHENTICATION ENGINE                         │
+│ ├─ Provision MySQL database instance.                                     │
+│ ├─ Build conflict-free `country`, `currency`, and `admn_settings` types.   │
+│ └─ Configure 1-year persistent JWT authentication parameters.             │
+└─────────────────────────────────────┬─────────────────────────────────────┘
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PHASE 2: MOBILE-FIRST MATERIAL UI FRONTEND DEV                            │
+│ ├─ Implement dense, mobile-first Material UI interface elements.          │
+│ ├─ Integrate `localStorage` state management hooks.                       │
+│ └─ Build responsive validation layer using `phoneNumberDigitLenth`.        │
+└─────────────────────────────────────┬─────────────────────────────────────┘
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PHASE 3: REAL-TIME WEBSOCKETS & POLLING FALLBACK                          │
+│ ├─ Deploy dual-socket connection endpoints (Main + Device namespaces).     │
+│ └─ Build countdown extension loops and backend-driven polling routines.   │
+└─────────────────────────────────────┬─────────────────────────────────────┘
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PHASE 4: PAWAPAY INTEGRATION & ESCROW RULES                               │
+│ ├─ Link PawaPay platform deposit and payout validation logic.             │
+│ └─ Implement escrow release mechanisms and forfeiture rules.              │
+└─────────────────────────────────────┬─────────────────────────────────────┘
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PHASE 5: MMP ROLLOUT (MARKETING, KYC & FX LAYERS)                         │
+│ ├─ Hook up the currency conversion caching engine for cross-border bids.  │
+│ ├─ Implement the affiliate link tracking and commission split system.     │
+│ └─ Add WebView haptic vibrations and offline 4-digit USSD tokens.         │
+└─────────────────────────────────────────────────────────────────────────
+
+example schema
+Every attribute is explicitly designed with unique prefixes (e.g., bidStatus, usrCountryCode) to prevent collisions with Strapi’s internal keywords (status, admin, id, role), and structured to handle pan-African currencies, multi-country overrides, escrow lifecycles, and commission payouts.1. Configurations & Core Localizationapi::currency.currency (Collection Type)Defines financial units utilized across varying African banking and mobile money corridors.typescript{
+  "kind": "collectionType",
+  "collectionName": "currencies",
+  "info": {
+    "singularName": "currency",
+    "pluralName": "currencies",
+    "displayName": "Currency"
+  },
+  "attributes": {
+    "savedCurrencyCode": { "type": "string", "required": true, "unique": true }, // e.g., "ZMW", "KES", "NGN"
+    "savedCurrencySymbol": { "type": "string", "required": true }, // e.g., "ZK", "KSh", "₦"
+    "currExchangeRateToUsd": { "type": "decimal", "required": true, "default": 1.00 } // Daily cached conversion matrix
+  }
+}
+Use code with caution.api::country.country (Collection Type)Enforces localized rules, payment interfaces, validation metrics, and regional operational configurations.typescript{
+  "kind": "collectionType",
+  "collectionName": "countries",
+  "info": {
+    "singularName": "country",
+    "pluralName": "countries",
+    "displayName": "Country"
+  },
+  "attributes": {
+    "countryName": { "type": "string", "required": true, "unique": true }, // e.g., "Zambia"
+    "savedPhoneCode": { "type": "string", "required": true }, // e.g., "260" (Stored without +)
+    "phoneNumberDigitLenth": { "type": "integer", "required": true, "default": 9 }, // Strict regex helper
+    "allowAffiliate": { "type": "boolean", "default": false },
+    "allowSelfDelivery": { "type": "boolean", "default": true },
+    "minimumAmountBeforeBidType": { "type": "enumeration", "enum": ["percentage", "flatrate"], "default": "percentage" },
+    "minimumAmountBeforeBid": { "type": "decimal", "default": 5.00 },
+    "timeToAllowBidWinnerToPayInMins": { "type": "integer", "default": 30 },
+    "maximumTimeBeforeBiddingClosesInMins": { "type": "integer", "default": 1440 },
+    "minimumBidsBeforeAuctionClose": { "type": "integer", "default": 1 },
+    "bidExtensionTriggerWindowMins": { "type": "integer", "default": 10 },
+    "maxSimultaneousBidsPerUser": { "type": "integer", "default": 3 },
+    "forfeitureSplitSellerPercentage": { "type": "decimal", "default": 50.00 },
+    "coolDownPeriodAfterForfeitMins": { "type": "integer", "default": 1440 },
+    "agentCommissionSplitPercentage": { "type": "decimal", "default": 50.00 },
+    "absorbPaymentFees": { "type": "boolean", "default": false },
+    "paymentGateway": { "type": "enumeration", "enum": ["pawapay", "lenco", "okra", "none"], "default": "pawapay" },
+    "currency": { "type": "relation", "relation": "manyToOne", "target": "api::currency.currency" }
+  }
+}
+Use code with caution.api::admn-setting.admn-setting (Single Type)Global fallback parameters used if a signed-in user's assigned country schema bypasses specific settings fields.typescript{
+  "kind": "singleType",
+  "collectionName": "admn_settings",
+  "info": {
+    "singularName": "admn-setting",
+    "pluralName": "admn-settings",
+    "displayName": "Global Admin Settings"
+  },
+  "attributes": {
+    "fallbackAllowAffiliate": { "type": "boolean", "default": false },
+    "fallbackAllowSelfDelivery": { "type": "boolean", "default": true },
+    "fallbackMinimumAmountBeforeBidType": { "type": "enumeration", "enum": ["percentage", "flatrate"], "default": "percentage" },
+    "fallbackMinimumAmountBeforeBid": { "type": "decimal", "default": 5.00 },
+    "fallbackTimeToAllowBidWinnerToPayInMins": { "type": "integer", "default": 30 },
+    "fallbackMaximumTimeBeforeBiddingClosesInMins": { "type": "integer", "default": 1440 },
+    "fallbackMinimumBidsBeforeAuctionClose": { "type": "integer", "default": 1 },
+    "fallbackBidExtensionTriggerWindowMins": { "type": "integer", "default": 10 },
+    "fallbackMaxSimultaneousBidsPerUser": { "type": "integer", "default": 3 },
+    "fallbackForfeitureSplitSellerPercentage": { "type": "decimal", "default": 50.00 },
+    "fallbackCoolDownPeriodAfterForfeitMins": { "type": "integer", "default": 1440 },
+    "fallbackPaymentGateway": { "type": "enumeration", "enum": ["pawapay", "lenco", "okra"], "default": "pawapay" },
+    "fallbackPollIntervalMs": { "type": "integer", "default": 3000 },
+    "prefferedSettingsCurrency": { "type": "relation", "relation": "manyToOne", "target": "api::currency.currency" } // Code defaults to ZMW if blank
+  }
+}
+Use code with caution.2. User & Wallet Subsystemsplugin::users-permissions.user (Extended Core Schema)Overriding Strapi’s base user schema to encapsulate single-account transactional capabilities, localization, and penalties.typescript{
+  "attributes": {
+    "usrFullName": { "type": "string", "required": true },
+    "usrPhoneNormalized": { "type": "string", "required": true, "unique": true }, // Format: 260971234567 (No +)
+    "usrKycVerified": { "type": "boolean", "default": false },
+    "usrKycReference": { "type": "string" }, // Internal anchor for Okra/SmileID queries
+    "usrCoolDownUntil": { "type": "datetime" }, // Set dynamically if user forfeits an auction win
+    "country": { "type": "relation", "relation": "manyToOne", "target": "api::country.country" },
+    "userWallet": { "type": "relation", "relation": "oneToOne", "target": "api::wallet.wallet", "mappedBy": "walletOwner" }
+  }
+}
+Use code with caution.api::wallet.wallet (Collection Type)Tracks real-time cash values, escrow balances, and currency denominations securely.typescript{
+  "kind": "collectionType",
+  "collectionName": "wallets",
+  "info": { "singularName": "wallet", "pluralName": "wallets", "displayName": "User Wallet" },
+  "attributes": {
+    "wltAvailableBalance": { "type": "decimal", "required": true, "default": 0.00 }, // Spendable/withdrawable
+    "wltLockedEscrowBalance": { "type": "decimal", "required": true, "default": 0.00 }, // Active held funds
+    "walletOwner": { "type": "relation", "relation": "oneToOne", "target": "plugin::users-permissions.user", "inversedBy": "userWallet" }
+  }
+}
+Use code with caution.api::transaction.transaction (Collection Type)Ledger records for deposits, withdrawals, refunds, payment gateway responses, and internal escrow lockups.typescript{
+  "kind": "collectionType",
+  "collectionName": "transactions",
+  "info": { "singularName": "transaction", "pluralName": "transactions", "displayName": "Financial Transaction" },
+  "attributes": {
+    "txReference": { "type": "string", "required": true, "unique": true }, // Generated tracking string
+    "txGatewayReference": { "type": "string" }, // PawaPay / Lenco external tracking string
+    "txAmount": { "type": "decimal", "required": true },
+    "txCurrencyCodeAtExecution": { "type": "string", "required": true }, // Historical trace capture
+    "txType": { "type": "enumeration", "enum": ["deposit", "withdrawal", "escrow_lock", "escrow_release", "refund", "forfeited_penalty"] },
+    "txStatus": { "type": "enumeration", "enum": ["pending", "completed", "failed", "reversed"] },
+    "wallet": { "type": "relation", "relation": "manyToOne", "target": "api::wallet.wallet" }
+  }
+}
+Use code with caution.3. Auctions & Bidding Engineapi::auction-item.auction-item (Collection Type)Primary directory of all marketplace items put up for bidding.typescript{
+  "kind": "collectionType",
+  "collectionName": "auction_items",
+  "info": { "singularName": "auction-item", "pluralName": "auction-items", "displayName": "Auction Listing" },
+  "attributes": {
+    "actTitle": { "type": "string", "required": true },
+    "actDescription": { "type": "text" },
+    "actStartingPriceUsd": { "type": "decimal", "required": true }, // Base platform evaluation metrics anchor
+    "actCurrentHighestPriceUsd": { "type": "decimal", "default": 0.00 },
+    "actListingTimeStart": { "type": "datetime", "required": true },
+    "actListingTimeEnd": { "type": "datetime", "required": true }, // Starts at +24hrs (Extensions manipulate this timestamp dynamically)
+    "actAuctionStatus": { "type": "enumeration", "enum": ["scheduled", "active", "payment_pending", "sold", "delisted_no_bids", "delisted_forfeited"] },
+    "actDeliveryConfirmationCode": { "type": "string" }, // Unique token auto-generated for off-line matching
+    "actBuyerConfirmedDelivery": { "type": "boolean", "default": false },
+    "actSellerConfirmedDelivery": { "type": "boolean", "default": false },
+    "actImages": { "type": "media", "multiple": true, "required": true },
+    "seller": { "type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user" },
+    "currentWinningBuyer": { "type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user" },
+    "itemOriginCountry": { "type": "relation", "relation": "manyToOne", "target": "api::country.country" }
+  }
+}
+Use code with caution.api::bid.bid (Collection Type)Individual record entries emitted live via WebSockets when users offer cash matches on active items.typescript{
+  "kind": "collectionType",
+  "collectionName": "bids",
+  "info": { "singularName": "bid", "pluralName": "bids", "displayName": "Auction Bid Log" },
+  "attributes": {
+    "bidAmountUsd": { "type": "decimal", "required": true }, // Standard baseline mapping
+    "bidAmountLocalSnapshot": { "type": "decimal", "required": true }, // Auditable historical track value
+    "bidLocalCurrencyCode": { "type": "string", "required": true }, // Track user currency context
+    "bidSecuredDepositHeld": { "type": "decimal", "required": true }, // Amount frozen out of user wallet
+    "bidStatus": { "type": "enumeration", "enum": ["active_leading", "outbid_refunded", "won_complete", "won_forfeited"] },
+    "bidder": { "type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user" },
+    "auctionItem": { "type": "relation", "relation": "manyToOne", "target": "api::auction-item.auction-item" }
+  }
+}
+Use code with caution.4. Viral Marketing & Affiliate Subsystemsapi::affiliate-link.affiliate-link (Collection Type)Generated system deep-links used to track referral pipelines.typescript{
+  "kind": "collectionType",
+  "collectionName": "affiliate_links",
+  "info": { "singularName": "affiliate-link", "pluralName": "affiliate-links", "displayName": "Marketing Referral Link" },
+  "attributes": {
+    "aflUniqueCode": { "type": "string", "required": true, "unique": true }, // e.g., "BID4U-X79Z-K9"
+    "aflTotalClicks": { "type": "integer", "default": 0 },
+    "affiliateAgent": { "type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user" },
+    "targetAuctionItem": { "type": "relation", "relation": "manyToOne", "target": "api::auction-item.auction-item" }
+  }
+}
+Use code with caution.api::commission-ledger.commission-ledger (Collection Type)Accounting tracking layer managing platform commission splits earned by users.typescript{
+  "kind": "collectionType",
+  "collectionName": "commission_ledgers",
+  "info": { "singularName": "commission-ledger", "pluralName": "commission-ledgers", "displayName": "Agent Earnings Ledger" },
+  "attributes": {
+    "comTotalPlatformFeeUsd": { "type": "decimal", "required": true },
+    "comAgentPayoutCutUsd": { "type": "decimal", "required": true },
+    "comPayoutStatus": { "type": "enumeration", "enum": ["accruing", "withdrawn_to_wallet"] },
+    "beneficiaryAgent": { "type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user" },
+    "sourceAuction": { "type": "relation", "relation": "oneToOne", "target": "api::auction-item.auction-item" }
+  }
+}
+
+frontend design schema example
+Here is the updated configuration schema for the frontend architecture. It removes the src folder constraint to align with a root-level path architecture and creates a centralized Constants.js configuration file to store your platform defaults, fallback metrics, and validation structures cleanly.1. Updated Project File Structure (Root Path Structure)textbidz4u-frontend/
+├── components/
+│   ├── AuctionCard.jsx          # Compact item card with gold flash animations
+│   ├── BiddingConsole.jsx       # Heavy tactility manual interaction dashboard
+│   └── FallbackProgress.jsx     # Minimalist status line tracking polling ticks
+├── context/
+│   └── AppContext.jsx           # Syncs LocalStorage, Country overrides, and Auth state
+├── hooks/
+│   ├── useSocket.jsx            # Handles dual-namespace connections (Main/Device)
+│   └── useAuctionTimer.jsx      # Handles strict 10-minute dynamic extensions
+├── pages/
+│   ├── auction/
+│   │   └── [id].jsx             # Real-time listing detail view
+│   └── login.jsx                # Country select dropdown + length validation
+├── theme/
+│   └── index.js                 # Core MUI palette configurations with deep shadows
+├── Constants.js                 # Centralized system constants and fallback metrics
+└── package.json
+Use code with caution.2. Centralized Configuration System (Constants.js)This file anchors the client application. It maps out your system configurations, fallback settings parameters matching the admn_settings model, and provides deterministic localization assets.javascript/**
+ * bidz4u.com - Centralized Application Constants & Fallbacks
+ */
+
+export const GLOBAL_DEFAULTS = {
+  // Base configuration rules
+  FALLBACK_CURRENCY_CODE: 'ZMW',
+  FALLBACK_CURRENCY_SYMBOL: 'ZK',
+  FALLBACK_POLL_INTERVAL_MS: 3000,
+  
+  // Auction structural constants
+  FALLBACK_MAX_TIME_BEFORE_BID_CLOSE_MINS: 1440, // 24 Hours
+  FALLBACK_MIN_BIDS_BEFORE_AUCTION_CLOSE: 1,
+  FALLBACK_BID_EXTENSION_TRIGGER_WINDOW_MINS: 10,
+  
+  // Financial & Escrow metrics
+  FALLBACK_MIN_AMOUNT_BEFORE_BID_TYPE: 'percentage', // 'percentage' | 'flatrate'
+  FALLBACK_MIN_AMOUNT_BEFORE_BID_VALUE: 5.00,        // 5% or 5 Flat
+  FALLBACK_TIME_TO_ALLOW_WINNER_TO_PAY_MINS: 30,
+  FALLBACK_FORFEITURE_SPLIT_SELLER_PERCENTAGE: 50.00,
+  
+  // Limits & Marketing
+  FALLBACK_MAX_SIMULTANEOUS_BIDS_PER_USER: 3,
+  FALLBACK_COOL_DOWN_PERIOD_AFTER_FORFEIT_MINS: 1440,
+  FALLBACK_AGENT_COMMISSION_SPLIT_PERCENTAGE: 50.00,
+  FALLBACK_ABSORB_PAYMENT_FEES: false,
+  FALLBACK_PAYMENT_GATEWAY: 'pawapay'
+};
+
+export const STORAGE_KEYS = {
+  AUTH_TOKEN: 'bidz4u_jwt',
+  USER_DATA: 'bidz4u_user',
+  COUNTRY_CONFIG: 'bidz4u_country_config',
+  REFERRAL_CODE: 'bidz4u_referral_tracking_id'
+};
+
+export const SOCKET_NAMESPACES = {
+  MAIN_WEB: '/main-sockets',
+  NATIVE_DEVICE: '/device-sockets'
+};
+
+export const CUSTOM_THEME_COLORS = {
+  PRIMARY_DEEP_BLUE: '#0A192F',
+  SECONDARY_SURFACE_BLUE: '#172A45',
+  BACKGROUND_DARK_CANVAS: '#020C1B',
+  ACCENT_GOLD: '#F59E0B',
+  ACCENT_GOLD_DARK: '#D97706',
+  TEXT_LIGHT: '#F8FAFC',
+  TEXT_MUTED: '#94A3B8'
+};
+
+backend schema
 
 ================================================================================
 FILE: admin/app.example.tsx
@@ -4861,4 +5136,4 @@ export const useSocket = (auctionItemId, { isReactNativeWebView = false, userId 
   return { livePrice, isUsingFallback };
 };
 */
-// give me the full and detailed backend flow and ensure to include all frontend hooking pointers and socket flow
+the following is a few files from my frontend

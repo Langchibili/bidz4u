@@ -30,7 +30,7 @@
     "actDeliveryConfirmationCode": { "type": "string" },
     "actBuyerConfirmedDelivery": { "type": "boolean", "default": false },
     "actSellerConfirmedDelivery": { "type": "boolean", "default": false },
-    "actImages": { "type": "media", "multiple": true, "required": true },
+    "actImages": { "type": "media", "multiple": true },
     "seller": {
       "type": "relation",
       "relation": "manyToOne",
@@ -52,6 +52,7 @@
       "target": "api::bid.bid",
       "mappedBy": "auctionItem"
     },
-    "actTown": { "type": "string" }
+    "actTown": { "type": "string" },
+    "actIsDraft": { "type": "boolean", "default": false }
   }
 }

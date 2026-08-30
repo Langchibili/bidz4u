@@ -66,6 +66,7 @@ admin/mvp-and-mmp-features.txt
 admin/logic.txt
 yarn-error.log
 
+logs
 
 # dependencies
 admin/node_modules

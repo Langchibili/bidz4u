@@ -25,8 +25,8 @@ Audited from your shared controllers:
 | `GET /countries/:id/effective-settings` | `resolveSettingsForCountry(strapi, Number(id))` | **id (numeric)** — `Number(documentId)` would be `NaN` |
 | `POST /user-registration/register` (body `countryId`) | `strapi.db.query('api::country.country').findOne({ where: { id: countryId } })` | **id (numeric)** |
 | Socket rooms (`auction:${auctionItemId}`) | `bid.place` emits with `auctionItem.id` (numeric); `auctionLifecycle.ts` / `forfeitureLifecycle.ts` also key everything off numeric `.id` | **id (numeric)**, always |
-| `POST /affiliate-links` (`targetAuctionItem`) | `strapi.service(...).create({ data })` — Document Service | likely **documentId** (relation-connect convention in v5) |
-| `POST /auction-items` (default core `create`, relation fields `seller`/`itemOriginCountry`/`actImages`) | Document Service | likely **documentId** for `seller`/`itemOriginCountry` — **media relations conventionally still use numeric `id`** in most v5 codebases, unverified against your exact version |
+| `POST /affiliate-links` (`targetAuctionItem`) | `strapi.service(...).create({ data })` — Document Service | likely **documentId** (relation-connect convention in v5) — still unverified, not yet exercised by any frontend flow |
+| `POST /auction-items` (now a **custom** `create` override, not default core — validates `itemOriginCountry` via `strapi.db.query('api::country.country').findOne({ where: { id } })` before calling the Document Service) | Raw Query Engine for validation, then Document Service for the actual create | **id (numeric)** for `itemOriginCountry` — confirmed, not guessed, since the validation step is raw db.query. `seller` is no longer sent by the frontend at all (the controller now forces it server-side from `ctx.state.user.id`, resolving the earlier spoofing gap). Media (`actImages`) relation unchanged — still numeric `id` from the upload response. |
 
 **Practical rule applied in the frontend code below:**
 `apiClient.resolveId(entity)` defaults to `documentId` everywhere. Every call
@@ -35,19 +35,21 @@ site that hits a controller doing raw `strapi.db.query(...).findOne({ where:
 and each override has a code comment pointing at this table so it's obvious
 *why* it deviates from the default.
 
-**If a relation-connect call in `/sell` (seller, itemOriginCountry, or the
-uploaded image) throws a "relation not found"-style error**, that's the one
-genuinely ambiguous row above — try switching that specific field to
-`apiClient.resolveId(x, 'id')` and it should resolve, since Strapi v5's exact
-behavior here can vary by patch version.
+**If a relation-connect call in `/sell` (the uploaded image) throws a
+"relation not found"-style error**, `actImages` is the one still-unverified
+row above — try switching it to `apiClient.resolveId(x, 'id')`-style
+resolution and it should resolve, since Strapi v5's exact behavior here can
+vary by patch version. `seller` and `itemOriginCountry` are no longer
+ambiguous — see the `POST /auction-items` row above.
 
-## Addendum — `GET /countries` for towns
+## Addendum — country/town selection on `/sell`
 
-`app/sell/page.jsx` fetches the seller's country's `towns` via
-`GET /countries?filters[id][$eq]=<numeric countryId>&fields[0]=towns` — a
-list `find` query, not the default core `findOne` (`:id` route). List
-queries filter on the raw `id` column as a plain equality condition, so this
-works with the numeric id we have cached, without needing the country's
-documentId at all. This is the same reasoning as the `country.id` uses
-elsewhere in this table (effective-settings, user-registration) — country
-identifiers stay numeric throughout this app.
+`app/sell/page.jsx` no longer makes a separate towns request at all — it
+fetches the full country list once (`GET /countries?populate=currency`,
+list `find`, same call `/login` and `/signup` already make) and reads each
+country's `towns` field straight off that response, since `towns` is a
+plain scalar attribute and isn't excluded by that query. The Country
+`<select>` uses `country.id` (numeric) as its value, matching the
+`itemOriginCountry` numeric requirement confirmed in the table above — no
+conversion needed between what the dropdown holds and what the create
+payload sends.

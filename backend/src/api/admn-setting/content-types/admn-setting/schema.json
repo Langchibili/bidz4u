@@ -28,6 +28,10 @@
       "type": "integer",
       "default": 1
     },
+    "fallbackMinimumAuctionStartingPrice": {
+      "type": "decimal",
+      "default": 10
+    },
     "fallbackBidExtensionTriggerWindowMins": {
       "type": "integer",
       "default": 10

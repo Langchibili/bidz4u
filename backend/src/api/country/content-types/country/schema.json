@@ -52,6 +52,10 @@
     "minimumAmountBeforeBid": {
       "type": "decimal"
     },
+    "minimumAuctionStartingPrice": {
+      "type": "decimal",
+      "default": 10
+    },
     "timeToAllowBidWinnerToPayInMins": {
       "type": "integer"
     },

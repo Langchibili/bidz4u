@@ -22,6 +22,12 @@ const TABS = [
   { label: 'Profile', value: '/profile', icon: <PersonIcon /> },
 ];
 
+// Tabs that must force a full page load instead of a Next.js client-side
+// transition. Sell is here because its draft-loading logic races against
+// AuthContext hydration on soft navigations — a full reload sidesteps that
+// entirely by re-running the whole app boot sequence.
+const FULL_RELOAD_TABS = new Set(['/sell']);
+
 export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
@@ -29,6 +35,14 @@ export default function BottomNav() {
   // Highlight the closest matching tab (e.g. /auction/12 doesn't match any
   // tab exactly — leave nothing selected rather than mis-highlighting Home).
   const current = TABS.find((t) => t.value === pathname)?.value || false;
+
+  const handleChange = (_, newValue) => {
+    if (FULL_RELOAD_TABS.has(newValue)) {
+      window.location.href = newValue;
+      return;
+    }
+    router.push(newValue);
+  };
 
   return (
     <Paper
@@ -46,7 +60,7 @@ export default function BottomNav() {
       <BottomNavigation
         showLabels
         value={current}
-        onChange={(_, newValue) => router.push(newValue)}
+        onChange={handleChange}
         sx={{
           bgcolor: 'background.paper',
           '& .Mui-selected': { color: 'secondary.main' },

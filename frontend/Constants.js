@@ -29,6 +29,16 @@ export const STORAGE_KEYS = {
   COUNTRY_CONFIG: 'bidz4u_country_config',
   REFERRAL_CODE: 'bidz4u_referral_tracking_id',
   SETTINGS: 'bidz4u_effective_settings',
+  // Draft auction-listing tracking (see app/sell/page.jsx). Deliberately two
+  // separate keys, not one: CURRENT_DRAFT_ID holds the draft's NUMERIC id
+  // (needed for the upload plugin's ref/refId attachment mechanism — see
+  // lib/api/uploads.js), while DRAFT_DOCUMENT_ID holds its documentId
+  // (needed for the default core GET/PUT /auction-items/:id route, which
+  // resolves :id as documentId in Strapi v5 — see UIDTYPE_AUDIT.md). Same
+  // id-convention split used everywhere else in this app, just persisted
+  // across page loads this time instead of resolved on the fly.
+  CURRENT_DRAFT_ID: 'currentActDraftId',
+  DRAFT_DOCUMENT_ID: 'actDraftDocumentId',
 };
 
 export const SOCKET_NAMESPACES = {
