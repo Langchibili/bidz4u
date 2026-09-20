@@ -25,8 +25,13 @@ export default function AuctionCard({ item, onClick }) {
   const timer = useAuctionTimer(item.actListingTimeEnd);
   const thumbnail = item.actImages?.[0]?.formats?.thumbnail?.url || item.actImages?.[0]?.url;
   const bidCount = Array.isArray(item.bids) ? item.bids.length : item.bidCount ?? null;
+  const currentHighestPrice =
+  item.actCurrentHighestPriceNative != null &&
+  item.actCurrentHighestPriceNative > 0
+    ? item.actCurrentHighestPriceNative
+    : item.actStartingPriceNative ?? 0;
 
-  return (
+ return (
     <Box
       onClick={onClick}
       component={motion.div}
@@ -87,7 +92,7 @@ export default function AuctionCard({ item, onClick }) {
         )}
 
         <Typography variant="h6" sx={{ fontWeight: 800, color: 'secondary.main', mt: 0.5 }}>
-          {formatCurrency(item.actCurrentHighestPriceNative, item.actNativeCurrencyCode)}
+          {formatCurrency(currentHighestPrice, item.actNativeCurrencyCode)}
         </Typography>
 
         <Typography variant="caption" color="text.secondary">

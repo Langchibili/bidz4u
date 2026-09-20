@@ -7,6 +7,12 @@ export default {
       config: { auth: false },
     },
     {
+      method: "GET",
+      path: "/auction-items/:userId/current-draft-id",
+      handler: "auction-item.currentDraftId",
+      config: { auth: {} },
+    },
+    {
       method: "POST",
       path: "/auction-items/:id/confirm-delivery",
       handler: "auction-item.confirmDelivery",

@@ -5246,3 +5246,425 @@ SMSGATEWAYAPIKEY=
 SMSGATEWAYAPIUSERNAME=
 SMSGATEWAYAPICALLERID=
 ```
+some things where revised, the full project flow with the backend is as follows
+
+# bidz4u.com — Full Backend Flow, Frontend Hooking Points & Socket Flow
+
+This ties together everything built so far (content types, controllers, payments, sockets) into
+one end-to-end reference: what calls what, in what order, and where the frontend plugs in at
+each step.
+
+---
+
+## 0. System Map
+
+```
+┌─────────────┐        REST (JWT)         ┌──────────────┐
+│  Next.js     │ ─────────────────────────▶│   Strapi      │
+│  Frontend    │◀───────────────────────── │   Backend     │
+└──────┬───────┘                            └──────┬────────┘
+       │  socket.io client                          │ socket.io client
+       │  (/main-sockets)                            │ (isStrapiSystem=true)
+       ▼                                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│           bidz4u Sockets Service (port 3015)                 │
+│           /main-sockets        /device-sockets               │
+└─────────────────────────────────────────────────────────────┘
+       ▲
+       │  socket.io client (/device-sockets)
+┌──────┴───────┐
+│ RN WebView    │
+│ Device App    │
+└───────────────┘
+```
+
+Three deployables: **Strapi backend** (REST + business logic + DB), **Sockets service**
+(port 3015, dual namespace), **Next.js frontend** + **RN WebView device app** (both socket
+clients). Strapi never receives socket connections from the frontend directly — it only pushes
+events *into* the sockets service as a privileged system client; the frontend/device apps talk to
+the sockets service directly for real-time, and to Strapi directly for REST.
+
+---
+
+## 1. Registration & Login Flow
+
+### 1a. Country selection (frontend → Strapi)
+
+```
+Frontend loads /login or /signup
+  → GET /countries?populate=currency
+  → Strapi: country.find (default core action)
+  ← [{ id, countryName, savedPhoneCode, phoneNumberDigitLenth, currency: {...} }, ...]
+Frontend defaults selection to Zambia if present, else first result
+```
+
+**Frontend hook point:** `fetchCountries()` in your login/signup page (already in the reference
+files you gave me) — no changes needed there, just point `NEXT_PUBLIC_API_URL` at your Strapi host.
+
+### 1b. Existing-user check (login path)
+
+```
+User enters phone → Continue
+  → POST /account-exist-check/check-user  { username: "<phoneCode><digits>" }
+  → Strapi: account-exist-check.checkUser
+  ← { userExists: true|false }
+
+If true  → POST /auth-otp/send { phoneNumber, purpose: 'login' }
+If false → redirect to /signup (pre-fill phone)
+```
+
+### 1c. New registration (signup path)
+
+```
+Country + phone confirmed, no existing account
+  → collect firstName, lastName, phone, email (optional — UI must state "you may leave this blank")
+  → POST /user-registration/register { firstName, lastName, phoneNumber, email, countryId }
+  → Strapi: user-registration.register
+      - builds username = `${country.savedPhoneCode}${last N digits}`
+      - creates plugin::users-permissions.user row (unconfirmed until OTP verifies... actually
+        confirmed:true is set immediately since OTP IS the confirmation step that follows)
+      - fires afterCreate lifecycle → handleUserCreation → creates api::wallet.wallet row
+  ← { status: true, userId, username }
+
+  → POST /auth-otp/send { phoneNumber: username, purpose: 'registration' }
+  → Strapi: otp-verification.send
+      - generates 6-digit code, saves to api::otp-verification.otp-verification (5 min expiry)
+      - sends via SendSmsNotification
+  ← { status: true, message: 'OTP sent' }
+
+Frontend navigates to /verify-phone?phone=...&purpose=registration|login
+```
+
+### 1d. OTP verification (both paths converge here)
+
+```
+User enters 6-digit code
+  → POST /auth-otp/verify { phoneNumber, otp, purpose }
+  → Strapi: otp-verification.verify
+      - verifyOtp() checks code + 5-min expiry, deletes record on success
+      - looks up user by username = phoneNumber
+      - issues JWT via strapi.plugin('users-permissions').service('jwt').issue({ id: user.id })
+  ← { status: true, jwt, user }
+
+Frontend:
+  - localStorage.setItem('bidz4u_jwt', jwt)
+  - localStorage.setItem('bidz4u_user', JSON.stringify(user))
+  - localStorage.setItem('bidz4u_country_config', JSON.stringify({ savedCountryName, savedPhoneCode, phoneNumberDigitLenth, savedCurrencyCode, savedCurrencySymbol }))
+  - redirect to '/'
+```
+
+**Frontend hook points:**
+- `useAuth()` hook (`lib/hooks/useAuth.js`) wraps `loginWithOTP`, `sendOTP`, `verifyOTP`, `register` — these map 1:1 onto the endpoints above.
+- `apiClient` (`lib/api/client.js`) should attach `Authorization: Bearer ${jwt}` from `localStorage.getItem('bidz4u_jwt')` on every request after login.
+- `AppContext.jsx` (from your `Constants.js` scaffold) — `handleUserLogin(jwt, user, country)` fires right after step 1d succeeds.
+
+---
+
+## 2. Settings Resolution Flow (runs once per session, cached client-side)
+
+```
+Immediately after login (or on app boot if a country config already exists in localStorage):
+  → GET /countries/:countryId/effective-settings
+  → Strapi: country.effectiveSettings
+      → resolveSettingsForCountry(strapi, countryId)
+          - reads admn_settings (fallback values)
+          - reads country row (per-country overrides)
+          - merges: country value wins if non-null, else admn_settings fallback
+          - resolves _settingsBaseCurrency (admn_settings.prefferedSettingsCurrency, default ZMW)
+          - resolves _userCurrency (country.currency.currCode)
+          - resolves _pollIntervalMs (for socket fallback)
+  ← { success: true, settings: {
+        allowAffiliate, allowSelfDelivery,
+        minimumAmountBeforeBidType, minimumAmountBeforeBid,
+        timeToAllowBidWinnerToPayInMins,
+        maximumTimeBeforeBiddingClosesInMins,
+        minimumBidsBeforeAuctionClose,
+        bidExtensionTriggerWindowMins,
+        maxSimultaneousBidsPerUser,
+        forfeitureSplitSellerPercentage,
+        coolDownPeriodAfterForfeitMins,
+        agentCommissionSplitPercentage,
+        absorbPaymentFees, paymentGateway,
+        _settingsBaseCurrency, _userCurrency, _pollIntervalMs
+      }}
+
+Frontend stores this in AppContext / Constants override, uses `_pollIntervalMs` for useSocket's
+polling fallback interval, `_userCurrency` for display formatting.
+```
+
+**Frontend hook point:** call this right after `handleUserLogin` and cache in context — don't
+refetch it per-page, only re-fetch if the user changes country in their profile settings.
+
+---
+
+## 3. Bidding Flow (the core real-time loop)
+
+### 3a. Initial page load
+
+```
+User opens /auction/[id]
+  → GET /auction-items/:id  (populate images, seller, bids)
+  → Strapi: auction-item.findOne (default core action)
+  ← full auction item record
+
+Frontend mounts useSocket(auctionItemId, { userId, userType: 'bidder', pollIntervalMs: settings._pollIntervalMs })
+  → socket.io connects to `${SOCKET_SERVER_URL}/main-sockets`
+      query: { auctionItemId, userId }
+  → Sockets service auto-joins socket to room `auction:${auctionItemId}` AND `user:${userId}`
+  ← 'main:connected' event confirms
+```
+
+### 3b. Placing a bid
+
+```
+User submits bid amount (in their local currency, e.g. ZMW)
+  → POST /bids/place  { auctionItemId, bidAmountLocal }   [Authorization: Bearer <jwt>]
+  → Strapi: bid.place
+      1. Fetch auction item, verify actAuctionStatus === 'active'
+      2. Fetch bidder + their country + wallet
+      3. resolveSettingsForCountry(strapi, bidder.country.id)
+      4. convertAmount(bidAmountLocal, userCurrency, 'USD')  → calls v6.exchangerate-api.com (cached 1hr)
+      5. Reject if bidAmountUsd <= actCurrentHighestPriceUsd
+      6. Compute minRequiredUsd from minimumAmountBeforeBidType/Value
+      7. convertAmount(wallet.wltAvailableBalance, walletCurrency, 'USD') → compare to minRequiredUsd
+      8. Reject if wallet balance insufficient
+      9. Create api::bid.bid row (bidStatus: 'active_leading')
+     10. Mark previous leading bid as 'outbid_refunded'
+     11. Update auction-item.actCurrentHighestPriceUsd + currentWinningBuyer
+     12. If (actListingTimeEnd - now) <= bidExtensionTriggerWindowMins → push actListingTimeEnd out
+         → socketService.emitAuctionExtended(auctionItemId, newEndTime)
+     13. socketService.emitBidPlaced(auctionItemId, { bidId, bidderId, bidAmountUsd, bidAmountLocalSnapshot, bidLocalCurrencyCode })
+  ← { status: true, bid }
+```
+
+### 3c. Socket propagation (the part that makes it "real-time")
+
+```
+Strapi's socketService (system client on /main-sockets) emits 'bid:placed' with { auctionItemId, ... }
+  → Sockets service relay (bindStrapiRelay):
+      - event is in STRAPI_ALLOWED_EVENTS ✓
+      - payload.auctionItemId present → emitToAuction(auctionItemId, 'bid:placed', payload)
+      - relays to room `auction:${id}` on BOTH /main-sockets and /device-sockets
+
+Every browser tab + every RN WebView device currently watching that auction receives 'bid:placed'
+  → useSocket's listener fires: setLivePrice(data.bidAmountUsd); setIsUsingFallback(false)
+  → UI flashes gold (per your visual spec), price updates, outbid banner shows for the previous leader
+```
+
+If a device is on cellular and the socket drops (`connect_error` fires), `useSocket` falls back to
+polling `GET /auction-items/:id/lightweight-status` every `_pollIntervalMs` (from step 2, sourced
+from `admn_settings.fallbackPollIntervalMs` unless the country overrides it).
+
+**Frontend hook points:**
+- `hooks/useSocket.jsx` (given in the sockets doc) — one call per auction detail page.
+- `hooks/useAuctionTimer.jsx` — listens for the same `'auction:extended'` event to reset its countdown, independent of `useSocket`'s price state.
+- Bid submission form calls `apiClient.post('/bids/place', { auctionItemId, bidAmountLocal })` directly — it does **not** need to touch sockets at all; the socket update the bidder sees for their own successful bid arrives via the same broadcast everyone else gets (confirms the pattern is truly server-authoritative).
+
+---
+
+## 4. Auction Closing & Forfeiture Flow (cron-driven, not client-driven)
+
+```
+Strapi cron 'closeExpiredAuctions' (every 30s):
+  → checkAndCloseExpiredAuctions(strapi)
+      - finds auction-items where actAuctionStatus='active' AND actListingTimeEnd <= now
+      - sets actAuctionStatus = 'payment_pending' (if there's a winner) or 'delisted_no_bids'
+      - socketService.emitAuctionClosed(itemId, winnerId)
+          → relay → emitToAuction(itemId, 'auction:closed', {...})
+          → frontend: countdown hits zero, UI locks bidding, shows "You won!" / "Auction ended" banner
+
+Strapi cron 'forfeitureSweep' (every 1 min):
+  → checkAndForfeitUnpaidWinners(strapi)
+      - finds items in 'payment_pending' past (actListingTimeEnd + timeToAllowBidWinnerToPayInMins)
+      - sets actAuctionStatus='delisted_forfeited', clears currentWinningBuyer
+      - marks winning bid bidStatus='won_forfeited'
+      - sets winner's usrCoolDownUntil = now + coolDownPeriodAfterForfeitMins
+      - socketService.emitForfeiture(itemId, winnerId)
+          → frontend: if the forfeiting user is still on that page, show cooldown notice
+```
+
+**Frontend hook point:** listen for `'auction:closed'` and `'bid:forfeited'` in the same
+`useSocket` subscription (or a small `useAuctionLifecycle` hook alongside it) to drive UI state
+transitions — don't rely on polling alone for these, since they're rare/high-stakes events where
+you want instant feedback.
+
+---
+
+## 5. Winner Payment Flow
+
+```
+Auction closes with a winner → actAuctionStatus = 'payment_pending'
+Frontend shows "Pay now" CTA with countdown = timeToAllowBidWinnerToPayInMins
+
+Winner clicks "Pay"
+  → POST /bidz4upay/initiate  { purpose: 'winnerpay', amount, relatedEntityId: auctionItemId, phone, operator }
+  → Strapi: bidz4upay.initiate
+      - resolves gateway from settings (pawapay/lenco)
+      - creates api::bidz4upay.bidz4upay row (payStatus: 'pending')
+      - calls gateway.initiatePayment(...)
+      - stores payGatewayReference
+  ← { success: true, data: { paymentId, reference, gatewayStatus } }
+
+Frontend polls GET /bidz4upay/status/:reference every few seconds until payStatus is terminal,
+OR waits for the webhook-driven socket event (faster path):
+
+Gateway sends webhook → POST /bidz4upay/webhook/:gateway
+  → Strapi: bidz4upay.webhook
+      - verifies signature
+      - parses reference → { contextId: auctionItemId, purpose: 'winnerpay', ... }
+      - marks bidz4upay row completed
+      - handleWinnerPaymentSuccess(): moves item to escrow, creates api::transaction.transaction (txType: 'escrow_lock')
+      - socketService.emitPaymentSuccess(winnerId, amount, reference)
+          → relay → emitToUser(winnerId, 'payment:success', {...})
+          → frontend: payment modal auto-closes, success toast, item moves to "Awaiting delivery"
+```
+
+**Frontend hook point:** a `usePaymentStatus(reference)` hook that both polls `GET
+/bidz4upay/status/:reference` AND listens for `'payment:success'` / `'payment:failed'` on the
+user's personal socket room — whichever arrives first resolves it. This dual approach covers the
+gap between webhook latency and socket delivery.
+
+---
+
+## 6. Wallet Deposit Flow (same pattern, different purpose)
+
+```
+User taps "Add funds" anywhere in the app
+  → POST /bidz4upay/initiate  { purpose: 'walletdeposit', amount, phone, operator }
+  → ... same as above, purpose='walletdeposit' instead of 'winnerpay', no relatedEntityId
+
+Webhook success → handleWalletDepositSuccess():
+  - credits api::wallet.wallet.wltAvailableBalance
+  - creates api::transaction.transaction (txType: 'deposit')
+  - emitPaymentSuccess(userId, amount, reference)
+      → frontend: wallet balance widget updates via 'payment:success' listener (global, not auction-scoped)
+```
+
+**Frontend hook point:** a top-level `useWalletSocket()` subscribed on `/main-sockets` with just
+`{ userId }` (no `auctionItemId`) — mount once near the app root so wallet balance updates land
+everywhere, not just on auction pages.
+
+---
+
+## 7. Withdrawal Flow
+
+```
+User requests withdrawal
+  → POST /bidz4upay/request-withdrawal { amount, method, phone/operator OR accountNumber/bankId/accountName }
+  → Strapi: bidz4upay.requestWithdrawal
+      - checks wallet.wltAvailableBalance >= amount
+      - OPTIMISTICALLY deducts balance immediately
+      - creates bidz4upay row (payDirection: 'payout', payStatus: 'processing')
+      - calls gateway.initiatePayout(...)
+      - on gateway throw → rolls back the deduction, marks payStatus='failed'
+  ← { success: true, data: { paymentId, reference, status: 'processing' } }
+
+Gateway payout webhook → POST /bidz4upay/webhook/:gateway/withdraw
+  → Strapi: bidz4upay.withdrawWebhook
+      - isPayoutCompleted → handleWithdrawalCompleted(): creates transaction (txType: 'withdrawal'), emitPaymentSuccess
+      - isPayoutFailed → handleWithdrawalFailed(): REFUNDS wallet balance, creates transaction (txType: 'refund'/reversed), emitPaymentFailed
+```
+
+**Frontend hook point:** same `usePaymentStatus`/`useWalletSocket` pattern as above — a failed
+payout refund should visibly bump the wallet balance back up in real time, not just on next page load.
+
+---
+
+## 8. Full Endpoint Reference (consolidated)
+
+| Method | Path | Purpose | Auth |
+|---|---|---|---|
+| GET | /countries | Country dropdown | none |
+| GET | /countries/:id/effective-settings | Resolved settings (country ⟶ admn fallback) | none |
+| POST | /account-exist-check/check-user | Check if phone is registered | none |
+| POST | /user-registration/register | Create account (pre-OTP) | none |
+| POST | /auth-otp/send | Send OTP | none |
+| POST | /auth-otp/resend | Resend OTP | none |
+| POST | /auth-otp/verify | Verify OTP → issue JWT | none |
+| GET | /auction-items | List/browse auctions | optional |
+| GET | /auction-items/:id | Single auction detail | optional |
+| GET | /auction-items/:id/lightweight-status | Poll fallback | none |
+| POST | /auction-items/:id/confirm-delivery | Buyer/seller confirms delivery | required |
+| POST | /bids/place | Place a bid | required |
+| GET | /bids/me | Bidder's own bid history | required |
+| GET | /wallets/me | Own wallet | required |
+| GET | /transactions/me | Own transaction history | required |
+| POST | /bidz4upay/initiate | Start deposit or winner payment | required |
+| GET | /bidz4upay/status/:reference | Poll payment status | required |
+| POST | /bidz4upay/webhook/:gateway | Gateway collection webhook | signature-verified |
+| POST | /bidz4upay/webhook/:gateway/withdraw | Gateway payout webhook | signature-verified |
+| POST | /bidz4upay/request-withdrawal | Withdraw wallet balance | required |
+| POST | /affiliate-links | Create referral link | required |
+| POST | /affiliate-links/:code/click | Track click | none |
+| GET | /commission-ledgers/me | Agent earnings | required |
+
+---
+
+## 9. Full Socket Event Reference (consolidated)
+
+| Event | Emitted by | Scope | Frontend reacts by |
+|---|---|---|---|
+| `bid:placed` | Strapi on every successful bid | `auction:${id}` room | Update live price, flash gold, mark outbid |
+| `auction:extended` | Strapi when bid lands in extension window | `auction:${id}` room | Reset countdown timer |
+| `auction:closed` | Strapi cron on expiry | `auction:${id}` room | Lock bidding UI, show winner/no-winner banner |
+| `bid:forfeited` | Strapi cron on missed payment window | `auction:${id}` room | Show cooldown notice to forfeiting user |
+| `payment:success` | Strapi bidz4upay webhook | `user:${id}` room | Close payment modal, bump wallet balance, success toast |
+| `payment:failed` | Strapi bidz4upay webhook | `user:${id}` room | Show failure reason, allow retry |
+| `device:haptic` | Strapi (e.g. on outbid, final 60s) | `user:${id}` room | RN WebView triggers native vibration bridge |
+| `notification:new` | Strapi generic notification | `user:${id}` room | Push into in-app notification tray |
+| `admin:announcement` | Strapi admin broadcast | global (all clients) | Banner/toast for everyone |
+
+---
+
+## 10. Environment Variables — full checklist across all three services
+
+**Strapi backend `.env`:**
+```
+EXCHANGE_RATE_API_KEY=
+SOCKET_SERVER_URL=http://localhost:3015
+STRAPI_SOCKET_SECRET=<must match sockets/.env>
+PAWAPAY_API_TOKEN=
+PAWAPAY_BASE_URL=https://api.pawapay.io
+PAWAPAY_WEBHOOK_SECRET=
+LENCO_SECRET_KEY=
+LENCO_ACCOUNT_ID=
+SMSGATEWAYURL=
+SMSGATEWAYAPIKEY=
+SMSGATEWAYAPIUSERNAME=
+SMSGATEWAYAPICALLERID=
+```
+
+**Sockets service `.env`:**
+```
+SOCKET_PORT=3015
+NODE_ENV=local
+CLIENT_URLS_LOCAL=http://localhost:3000,http://localhost:1343
+CLIENT_URLS_TEST=...
+CLIENT_URLS_PRODUCTION=...
+STRAPI_SOCKET_SECRET=<must match backend/.env>
+```
+
+**Next.js frontend `.env.local`:**
+```
+NEXT_PUBLIC_API_URL=http://localhost:1343/api
+NEXT_PUBLIC_SOCKET_SERVER_URL=http://localhost:3015
+```
+
+---
+
+## 11. What's still a manual/design decision (not yet built)
+
+- **Escrow release trigger** — right now `auction-item.confirmDelivery` flips `actAuctionStatus`
+  to `'sold'` once both sides confirm, but nothing yet *moves money* out of escrow to the seller's
+  wallet on that transition. That needs a small addition to `confirmDelivery` (or a cron sweep) that
+  creates a `txType: 'escrow_release'` transaction crediting the seller's wallet — say the word and
+  I'll add it.
+- **Affiliate commission calculation** — `commission-ledger` entries aren't created anywhere yet;
+  that needs to hook into `winnerpay` success, checking if the winning bid came in via a tracked
+  affiliate link and computing `agentCommissionSplitPercentage`.
+- **Haptic triggers** — `emitHapticPulse` exists in `socketService` but nothing calls it yet (e.g.
+  on outbid, or at T-60s before auction close) — that's a cron/event hook you'll want once the core
+  loop is stable.
+
+None of these block getting bidding + payments + auth working end to end — they're the MMP-phase
+items from your original plan.

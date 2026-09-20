@@ -100,7 +100,8 @@ export default function AuctionDetailPage() {
   // currency than the viewer's — NOT the viewer's own currencySymbol.
   // livePrice/liveCurrencyCode come from useSocket (bid:placed events or the
   // polling fallback); both fall back to the initially-fetched item.
-  const displayedPrice = livePrice ?? item?.actCurrentHighestPriceNative ?? 0;
+  const hasLivePrice = Number(livePrice) > 0;
+  const displayedPrice = hasLivePrice ? livePrice : item?.actStartingPriceNative ?? 0;
   const displayedCurrencyCode = liveCurrencyCode || item?.actNativeCurrencyCode || '';
   const displayedStatus = auctionStatus || item?.actAuctionStatus;
 

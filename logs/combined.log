@@ -352,3 +352,97 @@
 {"level":"info","message":"[main] Strapi system client connected","socketId":"dbOFOEfYfTeXUnFxAAAv","timestamp":"2026-08-29T23:58:14.265Z"}
 {"level":"info","message":"[main] Strapi system client connected","socketId":"ulsWSU6T3prOOhKQAAAx","timestamp":"2026-08-30T00:49:12.894Z"}
 {"level":"info","message":"[main] Strapi system client connected","socketId":"aq2hCyxHwZjy5bOrAAAz","timestamp":"2026-08-30T00:52:07.995Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T05:20:22.701Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"ping timeout","timestamp":"2026-08-30T05:20:25.032Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"9G7-tVEHMjyE458DAAA1","timestamp":"2026-08-30T05:20:25.982Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T12:17:02.472Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"K66WeJ8Vp6k-q08RAAA3","timestamp":"2026-08-30T12:17:30.873Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"JjwJojwefBGYbJLMAAA5","timestamp":"2026-08-30T12:19:30.305Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport error","timestamp":"2026-08-30T13:12:02.462Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"035lJPfS8enh1DdwAAA7","timestamp":"2026-08-30T13:12:02.468Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T13:12:03.173Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"QxAE2VPTtTfX0QYbAAA9","timestamp":"2026-08-30T13:12:05.073Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T13:12:13.562Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T13:12:21.356Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"QrQNUeNZHumpcb5jAAA_","timestamp":"2026-08-30T13:12:24.843Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T13:12:25.514Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"sHsGtb0CwZoAV4W_AABB","timestamp":"2026-08-30T13:12:32.535Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"vdMkf6UcKpef-_zfAABD","timestamp":"2026-08-30T13:12:44.254Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T13:12:54.901Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T13:12:58.453Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"-l0lcfDPm-vi-xvUAABG","timestamp":"2026-08-30T13:13:13.711Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"CXN1DAC9vB3E86ezAABH","timestamp":"2026-08-30T13:13:14.939Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T15:08:34.792Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T15:09:13.177Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T15:09:13.178Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T15:09:13.179Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T15:09:13.180Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T15:09:15.506Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"kybSSNKrGY5eFY89AABQ","timestamp":"2026-08-30T15:09:16.083Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"Jn6kgxVUrerTBwJaAABS","timestamp":"2026-08-30T15:09:16.233Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"gnVKf-VlTLHhiJHrAABV","timestamp":"2026-08-30T15:09:28.284Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"6k8P0GUJUAf81GryAABW","timestamp":"2026-08-30T15:09:30.695Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-30T15:09:32.736Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"1GL82oFDHzagnhtoAABY","timestamp":"2026-08-30T15:09:33.930Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"nXLNvXsGnbul5e2xAABa","timestamp":"2026-08-30T15:09:48.428Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"QtpWDffYlIxmMK23AABc","timestamp":"2026-08-30T15:10:08.705Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"ping timeout","timestamp":"2026-08-31T01:34:01.939Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"j0SKKk3RTCOLYr3lAABe","timestamp":"2026-08-31T01:34:11.791Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-31T02:12:57.812Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-31T02:13:45.284Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-08-31T02:13:45.286Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"ping timeout","timestamp":"2026-08-31T02:13:57.828Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"w4jZXNaBHV_ljTIOAAAB","timestamp":"2026-09-14T23:53:52.014Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-15T06:00:55.760Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"ZAsP-VxcsjtKeGprAAAD","timestamp":"2026-09-15T06:00:59.621Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport error","timestamp":"2026-09-15T15:07:14.365Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"gP-M9PhK90sH4acuAAAF","timestamp":"2026-09-15T15:07:21.132Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"ping timeout","timestamp":"2026-09-16T01:20:09.517Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"XMOnEJ5HYoBJTjLBAAAH","timestamp":"2026-09-16T01:21:31.879Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-16T09:01:39.330Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"FPm-hmo-IB3hL98gAAAJ","timestamp":"2026-09-16T09:01:52.126Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-16T11:12:19.861Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"x2R6uybYl9TuV-XlAAAL","timestamp":"2026-09-16T11:12:24.935Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport error","timestamp":"2026-09-16T12:52:47.225Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"o7My1FvGWnW8-BW3AAAN","timestamp":"2026-09-16T12:52:47.514Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-16T16:20:26.770Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"-lcbrwipQUQnHctIAAAP","timestamp":"2026-09-16T16:20:28.125Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"ping timeout","timestamp":"2026-09-17T11:28:06.745Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"2EovKSuRbopNeT8BAAAR","timestamp":"2026-09-17T11:30:28.726Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"ping timeout","timestamp":"2026-09-17T11:32:04.057Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"S5WmPiluVjxAfJgTAAAT","timestamp":"2026-09-17T11:32:57.374Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-17T11:39:41.081Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"W-TLULHvkLkzJBk9AAAV","timestamp":"2026-09-17T11:39:44.231Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-17T21:34:09.352Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"IP_H3oYzwUT1s1tbAAAa","timestamp":"2026-09-17T21:34:53.072Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-18T00:21:48.290Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"wBQBRTD6mIXTcEceAAAe","timestamp":"2026-09-18T00:22:05.200Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"3bpN0bfaCR1JQ4qHAAAg","timestamp":"2026-09-18T01:28:18.776Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-18T01:34:19.627Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-18T01:34:19.673Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"gu-p6HohOM_p7d6xAAAi","timestamp":"2026-09-18T01:35:44.205Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-18T06:31:12.964Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"ZK_vbE0FIuU8cSYLAAAk","timestamp":"2026-09-18T06:31:13.185Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport error","timestamp":"2026-09-18T14:39:42.791Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"EWSwqzWPlQixouySAAAn","timestamp":"2026-09-18T14:40:01.714Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport error","timestamp":"2026-09-18T15:16:15.186Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"4WvQuv4Q8msHAIQpAAAp","timestamp":"2026-09-18T15:16:18.453Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"GOxybNLCvEDK6U-hAAAr","timestamp":"2026-09-18T15:56:56.596Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-18T15:58:50.049Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-18T15:58:50.312Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"kO8qnRkYZoYiALlBAAAt","timestamp":"2026-09-18T16:00:47.176Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport error","timestamp":"2026-09-18T16:37:53.584Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"T1Z28SOIjuNumwCVAAAv","timestamp":"2026-09-18T16:37:53.596Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"1r_9LG78BHmiOLpHAAAB","timestamp":"2026-09-19T02:45:52.572Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"8nlmvP-mqfKYhpBiAAAB","timestamp":"2026-09-19T23:35:33.186Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport error","timestamp":"2026-09-19T23:42:56.888Z"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"XQSl2mf2hcQxW9KSAAAD","timestamp":"2026-09-19T23:42:57.721Z"}
+{"auctionItemId":"17","level":"info","message":"[main] client connected","socketId":"l_4NUo7f2nljV29DAAAF","timestamp":"2026-09-20T00:45:26.542Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"l_4NUo7f2nljV29DAAAF","timestamp":"2026-09-20T01:30:51.118Z"}
+{"auctionItemId":"17","level":"info","message":"[main] client connected","socketId":"mslX2xiAtqvF1AuYAAAH","timestamp":"2026-09-20T01:31:13.599Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"mslX2xiAtqvF1AuYAAAH","timestamp":"2026-09-20T01:39:27.292Z"}
+{"auctionItemId":"17","level":"info","message":"[main] client connected","socketId":"uwqTlNq-RuNmjI7HAAAJ","timestamp":"2026-09-20T01:39:30.025Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"client namespace disconnect","socketId":"uwqTlNq-RuNmjI7HAAAJ","timestamp":"2026-09-20T01:40:10.137Z"}
+{"auctionItemId":"17","level":"info","message":"[main] client connected","socketId":"ifWvsveS2kasUbkTAAAL","timestamp":"2026-09-20T01:42:12.606Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"client namespace disconnect","socketId":"ifWvsveS2kasUbkTAAAL","timestamp":"2026-09-20T01:42:19.502Z"}
+{"auctionItemId":"17","level":"info","message":"[main] client connected","socketId":"Qhon6mIyu8uz1avyAAAN","timestamp":"2026-09-20T02:22:48.563Z","userId":"7"}
