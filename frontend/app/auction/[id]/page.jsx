@@ -16,7 +16,7 @@
 // import PlaceIcon from '@mui/icons-material/PlaceOutlined';
 // import { apiClient } from '@/lib/api/client';
 // import { useAuth } from '@/lib/contexts/AuthContext';
-// import { useSocket } from '@/lib/hooks/useSocket';
+// import { useSocket, getDisplayedAuctionPrice, getDisplayedAuctionStatus } from '@/lib/hooks/useSocket';
 // import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
 // import { formatCurrency } from '@/Functions';
 // import BottomNav from '@/components/BottomNav';
@@ -57,13 +57,13 @@
 //   // UIDTYPE_AUDIT.md for the full endpoint-by-endpoint breakdown.
 //   const numericItemId = apiClient.resolveId(item, 'id');
 
-//   const { livePrice, liveCurrencyCode, auctionStatus, auctionEndTime, isUsingFallback, lastEvent } = useSocket(numericItemId, {
+//   const live = useSocket(numericItemId, {
 //     userId: apiClient.resolveId(user, 'id'),
 //     userType: 'bidder',
 //     pollIntervalMs,
 //   });
 
-//   const endTime = auctionEndTime || item?.actListingTimeEnd;
+//   const endTime = live.auctionEndTime || item?.actListingTimeEnd;
 //   const timer = useAuctionTimer(endTime);
 
 //   const fetchItem = useCallback(async () => {
@@ -87,35 +87,23 @@
 
 //   // Flash gold whenever a new bid lands over the socket
 //   useEffect(() => {
-//     if (lastEvent?.type === 'bid:placed') {
+//     if (live.lastEvent?.type === 'bid:placed') {
 //       setFlash(true);
 //       const t = setTimeout(() => setFlash(false), 700);
 //       return () => clearTimeout(t);
 //     }
 //     return undefined;
-//   }, [lastEvent]);
+//   }, [live.lastEvent]);
 
 //   // The auction's current highest bid is denominated in the LISTING's own
 //   // currency (actNativeCurrencyCode), which may be a different country's
 //   // currency than the viewer's — NOT the viewer's own currencySymbol.
-//   // livePrice/liveCurrencyCode come from useSocket (bid:placed events or the
-//   // polling fallback); both fall back to the initially-fetched item.
-//   // const hasLivePrice = Number(livePrice) > 0;
-//   // const displayedPrice = hasLivePrice ? livePrice : item?.actStartingPriceNative ?? 0;
-//   // const displayedCurrencyCode = liveCurrencyCode || item?.actNativeCurrencyCode || '';
-//   // const displayedStatus = auctionStatus || item?.actAuctionStatus;
-
-//   const hasLivePrice = Number(livePrice) > 0;
-//   const hasCurrentHighest = Number(item?.actCurrentHighestPriceNative) > 0;
-
-//   const displayedPrice = hasLivePrice
-//     ? livePrice
-//     : hasCurrentHighest
-//       ? item.actCurrentHighestPriceNative
-//       : item?.actStartingPriceNative ?? 0;
-
-//   const displayedCurrencyCode = liveCurrencyCode || item?.actNativeCurrencyCode || '';
-//   const displayedStatus = auctionStatus || item?.actAuctionStatus;
+//   // getDisplayedAuctionPrice/getDisplayedAuctionStatus (from
+//   // lib/hooks/useSocket.jsx) are the SAME helpers the home feed's
+//   // AuctionCard uses, so the two surfaces can never disagree on how a
+//   // price/status is derived from live vs. initially-fetched data.
+//   const { displayedPrice, displayedCurrencyCode } = getDisplayedAuctionPrice(item, live);
+//   const displayedStatus = getDisplayedAuctionStatus(item, live);
 
 //   const handlePlaceBid = async () => {
 //     setBidError('');
@@ -265,7 +253,7 @@
 //           {timer.isExpired ? 'Auction ended' : `${timer.display} left`}
 //         </Typography>
 
-//         {isUsingFallback && (
+//         {live.isUsingFallback && (
 //           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
 //             Live connection lost — updating via polling
 //           </Typography>
@@ -325,7 +313,6 @@
 //     </Box>
 //   );
 // }
-
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -344,7 +331,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import PlaceIcon from '@mui/icons-material/PlaceOutlined';
 import { apiClient } from '@/lib/api/client';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { useSocket, getDisplayedAuctionPrice, getDisplayedAuctionStatus } from '@/lib/hooks/useSocket';
+import { useSocket, getDisplayedAuctionPrice, getDisplayedAuctionStatus, useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
 import { formatCurrency } from '@/Functions';
 import BottomNav from '@/components/BottomNav';
@@ -369,9 +356,11 @@ export default function AuctionDetailPage() {
 
   // What the VIEWER types into the bid box is in THEIR OWN currency
   // (bidAmountLocal — bid.place converts it server-side into the auction's
-  // native currency). This is separate from what the current-highest-bid
-  // display below uses, which must be the auction's own currency — see the
-  // note further down.
+  // native currency). The main price display below is ALSO shown in the
+  // viewer's own currency now (via useViewerCurrencyRate) — see the
+  // PRICE CURRENCY note further down for how that's kept honest when the
+  // listing's native currency differs.
+  const viewerCurrencyCode = countryConfig?.savedCurrencyCode;
   const viewerCurrencyLabel = countryConfig?.savedCurrencySymbol || countryConfig?.savedCurrencyCode || '';
   const pollIntervalMs = effectiveSettings?._pollIntervalMs;
 
@@ -423,15 +412,20 @@ export default function AuctionDetailPage() {
     return undefined;
   }, [live.lastEvent]);
 
-  // The auction's current highest bid is denominated in the LISTING's own
-  // currency (actNativeCurrencyCode), which may be a different country's
-  // currency than the viewer's — NOT the viewer's own currencySymbol.
-  // getDisplayedAuctionPrice/getDisplayedAuctionStatus (from
-  // lib/hooks/useSocket.jsx) are the SAME helpers the home feed's
-  // AuctionCard uses, so the two surfaces can never disagree on how a
-  // price/status is derived from live vs. initially-fetched data.
-  const { displayedPrice, displayedCurrencyCode } = getDisplayedAuctionPrice(item, live);
+  // PRICE CURRENCY: the listing's price is stored/emitted in its own
+  // "native" currency (actNativeCurrencyCode), which may be a different
+  // country's currency than the viewer's. getDisplayedAuctionPrice /
+  // getDisplayedAuctionStatus (from lib/hooks/useSocket.jsx) resolve that
+  // native price/status the SAME way the home feed's AuctionCard does, so
+  // the two surfaces can never disagree on live-vs-fetched precedence.
+  // useViewerCurrencyRate() then converts that native price into the
+  // VIEWER's own currency — shown below with the viewer's own currency
+  // symbol, same as the wallet page.
+  const { displayedPrice: nativePrice, displayedCurrencyCode: nativeCurrencyCode } = getDisplayedAuctionPrice(item, live);
   const displayedStatus = getDisplayedAuctionStatus(item, live);
+  const { rate, isReady: isPriceReady } = useViewerCurrencyRate(nativeCurrencyCode, viewerCurrencyCode);
+  const displayedPrice = Number(nativePrice) * rate;
+  const wasCurrencyConverted = !!nativeCurrencyCode && !!viewerCurrencyCode && nativeCurrencyCode !== viewerCurrencyCode;
 
   const handlePlaceBid = async () => {
     setBidError('');
@@ -515,7 +509,6 @@ export default function AuctionDetailPage() {
 
   const isActive = displayedStatus === 'active';
   const isFinalMinute = timer.isInFinalMinute;
-  const currencyMismatch = viewerCurrencyLabel && displayedCurrencyCode && viewerCurrencyLabel !== displayedCurrencyCode;
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3, pb: 10 }}>
@@ -564,12 +557,18 @@ export default function AuctionDetailPage() {
         </Box>
 
         <AnimatePresence mode="wait">
-          <motion.div key={displayedPrice} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div key={isPriceReady ? displayedPrice : 'loading'} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
             <Typography variant="h3" sx={{ fontWeight: 800, color: 'secondary.main' }}>
-              {formatCurrency(displayedPrice, displayedCurrencyCode)}
+              {isPriceReady ? formatCurrency(displayedPrice, viewerCurrencyLabel) : '...'}
             </Typography>
           </motion.div>
         </AnimatePresence>
+
+        {isPriceReady && wasCurrencyConverted && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Originally listed in {nativeCurrencyCode} — converted to your currency
+          </Typography>
+        )}
 
         <Typography
           component={motion.div}
@@ -590,12 +589,6 @@ export default function AuctionDetailPage() {
 
       {isActive && !timer.isExpired && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {currencyMismatch && (
-            <Typography variant="caption" color="text.secondary">
-              This listing is priced in {displayedCurrencyCode}. Enter your bid in your own
-              currency ({viewerCurrencyLabel}) — it'll be converted automatically.
-            </Typography>
-          )}
           <TextField
             fullWidth
             type="number"

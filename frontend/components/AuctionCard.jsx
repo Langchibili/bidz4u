@@ -1,3 +1,4 @@
+
 // 'use client';
 // // components/AuctionCard.jsx
 // //
@@ -5,31 +6,43 @@
 // // the right. Bid count comes from item.bids?.length — see the README note on
 // // /auction-items populate cost, since there's no dedicated count field.
 // //
-// // PRICE CURRENCY (fixed): auction-item moved from a flat USD price to a
-// // per-item "native currency" — the price shown here is always in the
-// // LISTING's own currency (item.actCurrentHighestPriceNative /
-// // item.actNativeCurrencyCode), which may differ from the viewer's own
-// // currency if the item was listed in a different country. This card no
-// // longer takes a `currencySymbol` prop for that reason — passing the
-// // viewer's currency here would be actively wrong now that items can be
-// // denominated in any listed country's currency.
+// // LIVE UPDATES: this card subscribes to the same shared socket connection
+// // (and the same reconnect-safe polling fallback) as the auction detail page
+// // — both go through lib/hooks/useSocket.jsx, which is the single place that
+// // owns socket-connection and price/status-display logic for the whole app.
+// // Previously this card never subscribed to anything and just showed the
+// // price from whenever the feed was last fetched, which is why bids placed
+// // while someone was sitting on the home feed never visibly updated it.
+// //
+// // PRICE CURRENCY: auction-item uses a per-item "native currency" — the price
+// // shown here is always in the LISTING's own currency (actNativeCurrencyCode
+// // / actCurrentHighestPriceNative, or the live socket/poll equivalent), which
+// // may differ from the viewer's own currency if the item was listed in a
+// // different country. This card doesn't take a `currencySymbol` prop for
+// // that reason — passing the viewer's currency here would be actively wrong.
 
 // import { Box, Typography, Chip } from '@mui/material';
-// import { motion } from 'framer-motion';
+// import { motion, AnimatePresence } from 'framer-motion';
 // import PlaceIcon from '@mui/icons-material/PlaceOutlined';
+// import { apiClient } from '@/lib/api/client';
 // import { formatCurrency, getMediaUrl } from '@/Functions';
 // import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
+// import { useSocket, getDisplayedAuctionPrice } from '@/lib/hooks/useSocket';
 // import { CUSTOM_THEME_COLORS } from '@/Constants';
 
 // export default function AuctionCard({ item, onClick }) {
-//   const timer = useAuctionTimer(item.actListingTimeEnd);
+//   // Numeric id — the sockets service rooms and the lightweight-status
+//   // polling fallback both key off this, not documentId. See the uidType
+//   // note at the top of lib/hooks/useSocket.jsx.
+//   const numericItemId = apiClient.resolveId(item, 'id');
+//   const live = useSocket(numericItemId);
+
+//   const endTime = live.auctionEndTime || item.actListingTimeEnd;
+//   const timer = useAuctionTimer(endTime);
 //   const thumbnail = item.actImages?.[0]?.formats?.thumbnail?.url || item.actImages?.[0]?.url;
 //   const bidCount = Array.isArray(item.bids) ? item.bids.length : item.bidCount ?? null;
-//   const currentHighestPrice =
-//   item.actCurrentHighestPriceNative != null &&
-//   item.actCurrentHighestPriceNative > 0
-//     ? item.actCurrentHighestPriceNative
-//     : item.actStartingPriceNative ?? 0;
+
+//   const { displayedPrice, displayedCurrencyCode } = getDisplayedAuctionPrice(item, live);
 
 //  return (
 //     <Box
@@ -91,9 +104,13 @@
 //           </Box>
 //         )}
 
-//         <Typography variant="h6" sx={{ fontWeight: 800, color: 'secondary.main', mt: 0.5 }}>
-//           {formatCurrency(currentHighestPrice, item.actNativeCurrencyCode)}
-//         </Typography>
+//         <AnimatePresence mode="wait">
+//           <motion.div key={displayedPrice} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
+//             <Typography variant="h6" sx={{ fontWeight: 800, color: 'secondary.main', mt: 0.5 }}>
+//               {formatCurrency(displayedPrice, displayedCurrencyCode)}
+//             </Typography>
+//           </motion.div>
+//         </AnimatePresence>
 
 //         <Typography variant="caption" color="text.secondary">
 //           {bidCount !== null ? `${bidCount} bid${bidCount === 1 ? '' : 's'}` : 'No bids yet'}
@@ -112,28 +129,36 @@
 // LIVE UPDATES: this card subscribes to the same shared socket connection
 // (and the same reconnect-safe polling fallback) as the auction detail page
 // — both go through lib/hooks/useSocket.jsx, which is the single place that
-// owns socket-connection and price/status-display logic for the whole app.
-// Previously this card never subscribed to anything and just showed the
-// price from whenever the feed was last fetched, which is why bids placed
-// while someone was sitting on the home feed never visibly updated it.
+// owns socket-connection, price/status-display, and currency-conversion
+// logic for the whole app. Previously this card never subscribed to
+// anything and just showed the price from whenever the feed was last
+// fetched, which is why bids placed while someone was sitting on the home
+// feed never visibly updated it.
 //
-// PRICE CURRENCY: auction-item uses a per-item "native currency" — the price
-// shown here is always in the LISTING's own currency (actNativeCurrencyCode
-// / actCurrentHighestPriceNative, or the live socket/poll equivalent), which
-// may differ from the viewer's own currency if the item was listed in a
-// different country. This card doesn't take a `currencySymbol` prop for
-// that reason — passing the viewer's currency here would be actively wrong.
+// PRICE CURRENCY: the listing's price is stored/emitted in its own "native"
+// currency (actNativeCurrencyCode), which may differ from the viewer's own
+// currency if the item was listed in a different country. This card
+// converts that native price into the VIEWER's own currency for display —
+// via useViewerCurrencyRate(), which calls the backend's currency
+// conversion controller — and always shows it with the viewer's own
+// currency symbol (countryConfig.savedCurrencySymbol), the same way the
+// wallet page always shows amounts in the viewer's own currency.
 
 import { Box, Typography, Chip } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import PlaceIcon from '@mui/icons-material/PlaceOutlined';
 import { apiClient } from '@/lib/api/client';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { formatCurrency, getMediaUrl } from '@/Functions';
 import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
-import { useSocket, getDisplayedAuctionPrice } from '@/lib/hooks/useSocket';
+import { useSocket, getDisplayedAuctionPrice, useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import { CUSTOM_THEME_COLORS } from '@/Constants';
 
 export default function AuctionCard({ item, onClick }) {
+  const { countryConfig } = useAuth();
+  const viewerCurrencyCode = countryConfig?.savedCurrencyCode;
+  const viewerCurrencySymbol = countryConfig?.savedCurrencySymbol || viewerCurrencyCode || '';
+
   // Numeric id — the sockets service rooms and the lightweight-status
   // polling fallback both key off this, not documentId. See the uidType
   // note at the top of lib/hooks/useSocket.jsx.
@@ -145,7 +170,9 @@ export default function AuctionCard({ item, onClick }) {
   const thumbnail = item.actImages?.[0]?.formats?.thumbnail?.url || item.actImages?.[0]?.url;
   const bidCount = Array.isArray(item.bids) ? item.bids.length : item.bidCount ?? null;
 
-  const { displayedPrice, displayedCurrencyCode } = getDisplayedAuctionPrice(item, live);
+  const { displayedPrice: nativePrice, displayedCurrencyCode: nativeCurrencyCode } = getDisplayedAuctionPrice(item, live);
+  const { rate, isReady: isPriceReady } = useViewerCurrencyRate(nativeCurrencyCode, viewerCurrencyCode);
+  const displayedPrice = Number(nativePrice) * rate;
 
  return (
     <Box
@@ -208,9 +235,9 @@ export default function AuctionCard({ item, onClick }) {
         )}
 
         <AnimatePresence mode="wait">
-          <motion.div key={displayedPrice} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div key={isPriceReady ? displayedPrice : 'loading'} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
             <Typography variant="h6" sx={{ fontWeight: 800, color: 'secondary.main', mt: 0.5 }}>
-              {formatCurrency(displayedPrice, displayedCurrencyCode)}
+              {isPriceReady ? formatCurrency(displayedPrice, viewerCurrencySymbol) : '...'}
             </Typography>
           </motion.div>
         </AnimatePresence>

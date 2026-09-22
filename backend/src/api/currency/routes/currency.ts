@@ -1,7 +1,10 @@
-/**
- * currency router
- */
-
-import { factories } from '@strapi/strapi';
-
-export default factories.createCoreRouter('api::currency.currency');
+export default {
+  routes: [
+    {
+      method: "POST",
+      path: "/currencies/convert-price",
+      handler: "currency.convertPrice",
+      config: { auth: {} },
+    },
+  ],
+};
