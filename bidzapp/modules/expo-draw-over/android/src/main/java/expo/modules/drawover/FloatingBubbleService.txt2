@@ -1,0 +1,460 @@
+package expo.modules.drawover
+
+import android.app.*
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import android.util.Log
+import android.view.*
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.core.app.NotificationCompat
+
+class FloatingBubbleService : Service() {
+
+    private var windowManager: WindowManager? = null
+    private var floatingView: View? = null
+    private var dismissView: View? = null
+    private var bubbleIcon: ImageView? = null
+    private var notificationBadge: TextView? = null
+    private var rippleView: View? = null
+
+    private var isShowing = false
+    private var isDismissVisible = false
+    private var initialX = 0
+    private var initialY = 0
+    private var initialTouchX = 0f
+    private var initialTouchY = 0f
+
+    private val handler = Handler(Looper.getMainLooper())
+
+    // Auto-fade after 1 minute of inactivity
+    private var fadeRunnable: Runnable? = null
+    private val FADE_DELAY_MS = 60 * 1000L  // 1 minute
+    private val IDLE_ALPHA = 0.35f
+
+    companion object {
+        private const val TAG = "FloatingBubbleService"
+        const val ACTION_START = "ACTION_START"
+        const val ACTION_STOP = "ACTION_STOP"
+        const val ACTION_UPDATE_BADGE = "ACTION_UPDATE_BADGE"
+        const val ACTION_SHOW_RIPPLE = "ACTION_SHOW_RIPPLE"
+        const val ACTION_APP_FOREGROUND = "ACTION_APP_FOREGROUND"
+        const val ACTION_APP_BACKGROUND = "ACTION_APP_BACKGROUND"
+        const val EXTRA_BADGE_COUNT = "EXTRA_BADGE_COUNT"
+        const val CHANNEL_ID = "floating_bubble_channel"
+        const val NOTIFICATION_ID = 1001
+
+        private var instance: FloatingBubbleService? = null
+
+        fun isRunning(): Boolean = instance != null
+
+        fun start(context: Context) {
+            Log.d(TAG, "ğŸ”µ start() called")
+            val intent = Intent(context, FloatingBubbleService::class.java).apply {
+                action = ACTION_START
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+                Log.d(TAG, "Started foreground service")
+            } else {
+                context.startService(intent)
+                Log.d(TAG, "Started service")
+            }
+        }
+
+        fun stop(context: Context) {
+            Log.d(TAG, "ğŸ›‘ stop() called")
+            val intent = Intent(context, FloatingBubbleService::class.java).apply {
+                action = ACTION_STOP
+            }
+            context.startService(intent)
+        }
+
+        fun updateBadge(context: Context, count: Int) {
+            Log.d(TAG, "ğŸ“Š updateBadge() called with count: $count")
+            val intent = Intent(context, FloatingBubbleService::class.java).apply {
+                action = ACTION_UPDATE_BADGE
+                putExtra(EXTRA_BADGE_COUNT, count)
+            }
+            context.startService(intent)
+        }
+
+        fun showRipple(context: Context) {
+            Log.d(TAG, "ğŸ’« showRipple() called")
+            val intent = Intent(context, FloatingBubbleService::class.java).apply {
+                action = ACTION_SHOW_RIPPLE
+            }
+            context.startService(intent)
+        }
+
+        fun notifyAppForeground(context: Context) {
+            Log.d(TAG, "ğŸ“± notifyAppForeground() called")
+            val intent = Intent(context, FloatingBubbleService::class.java).apply {
+                action = ACTION_APP_FOREGROUND
+            }
+            context.startService(intent)
+        }
+
+        fun notifyAppBackground(context: Context) {
+            Log.d(TAG, "ğŸ“± notifyAppBackground() called")
+            val intent = Intent(context, FloatingBubbleService::class.java).apply {
+                action = ACTION_APP_BACKGROUND
+            }
+            context.startService(intent)
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        Log.d(TAG, "âœ… onCreate() called")
+        instance = this
+        createNotificationChannel()
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        Log.d(TAG, "WindowManager initialized")
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "âš¡ onStartCommand() called with action: ${intent?.action}")
+
+        // Always call startForeground first on Android 8+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
+
+        when (intent?.action) {
+            ACTION_START -> showFloatingBubble()
+
+            ACTION_STOP -> {
+                Log.d(TAG, "ğŸ›‘ Stopping service...")
+                hideFloatingBubble()
+                hideDismissZone()
+                cancelFadeTimer()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                stopSelf()
+            }
+
+            ACTION_UPDATE_BADGE -> {
+                val count = intent.getIntExtra(EXTRA_BADGE_COUNT, 0)
+                Log.d(TAG, "ğŸ“Š Updating badge to: $count")
+                updateBadgeCount(count)
+            }
+
+            ACTION_SHOW_RIPPLE -> animateRipple()
+
+            ACTION_APP_FOREGROUND -> {
+                Log.d(TAG, "ğŸ“± App in foreground - hiding bubble")
+                handler.post { floatingView?.visibility = View.GONE }
+                cancelFadeTimer()
+            }
+
+            ACTION_APP_BACKGROUND -> {
+                Log.d(TAG, "ğŸ“± App in background - showing bubble")
+                handler.post { floatingView?.visibility = View.VISIBLE }
+                scheduleFade()
+            }
+        }
+        return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "ğŸ’€ onDestroy() called")
+        hideFloatingBubble()
+        hideDismissZone()
+        cancelFadeTimer()
+        instance = null
+    }
+
+    // â”€â”€â”€ Notification channel & notification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Floating Bubble",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Keeps the floating bubble active"
+                setShowBadge(false)
+            }
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager?.createNotificationChannel(channel)
+            Log.d(TAG, "Notification channel created")
+        }
+    }
+
+    private fun createNotification(): Notification {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, pendingIntentFlags)
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("You're Online")
+            .setContentText("Tap to open OkraRides")
+            .setSmallIcon(applicationInfo.icon)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+    }
+
+    // â”€â”€â”€ Fade timer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    private fun scheduleFade() {
+        cancelFadeTimer()
+        handler.post { floatingView?.alpha = 1f }
+
+        fadeRunnable = Runnable {
+            handler.post {
+                floatingView?.animate()
+                    ?.alpha(IDLE_ALPHA)
+                    ?.setDuration(1500)
+                    ?.start()
+                Log.d(TAG, "ğŸ’¤ Bubble faded to idle opacity after 1 min")
+            }
+        }
+        handler.postDelayed(fadeRunnable!!, FADE_DELAY_MS)
+        Log.d(TAG, "â± Fade timer scheduled for ${FADE_DELAY_MS / 1000}s")
+    }
+
+    private fun cancelFadeTimer() {
+        fadeRunnable?.let {
+            handler.removeCallbacks(it)
+            fadeRunnable = null
+            Log.d(TAG, "â± Fade timer cancelled")
+        }
+    }
+
+    // â”€â”€â”€ Dismiss zone (Facebook Messenger style X at bottom centre) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    private fun showDismissZone() {
+        if (isDismissVisible) return
+
+        val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+        val density = resources.displayMetrics.density
+        val dismissSize = (72 * density).toInt()
+
+        dismissView = FrameLayout(this).apply {
+            val circle = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#CC000000"))
+                setStroke((2 * density).toInt(), Color.WHITE)
+            }
+            background = circle
+            alpha = 0.6f
+
+            val xText = TextView(context).apply {
+                text = "âœ•"
+                textSize = 20f
+                setTextColor(Color.WHITE)
+                gravity = android.view.Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            }
+            addView(xText)
+        }
+
+        val params = WindowManager.LayoutParams(
+            dismissSize,
+            dismissSize,
+            layoutFlag,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+            y = (48 * density).toInt()
+        }
+
+        windowManager?.addView(dismissView, params)
+        isDismissVisible = true
+        Log.d(TAG, "Dismiss zone shown")
+    }
+
+    private fun hideDismissZone() {
+        if (!isDismissVisible || dismissView == null) return
+        try {
+            windowManager?.removeView(dismissView)
+            dismissView = null
+            isDismissVisible = false
+            Log.d(TAG, "Dismiss zone hidden")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error hiding dismiss zone", e)
+        }
+    }
+
+    // Uses raw screen coordinates â€” works correctly with TOP|START gravity
+    private fun isOverDismissZone(rawX: Float, rawY: Float): Boolean {
+        val density = resources.displayMetrics.density
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+        val dismissRadius = 72 * density
+        val dismissX = screenWidth / 2f
+        val dismissY = screenHeight - (120 * density)
+
+        val distance = Math.sqrt(
+            ((rawX - dismissX) * (rawX - dismissX) +
+             (rawY - dismissY) * (rawY - dismissY)).toDouble()
+        )
+        return distance < dismissRadius
+    }
+
+    // â”€â”€â”€ Main bubble â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    private fun showFloatingBubble() {
+        Log.d(TAG, "ğŸˆ showFloatingBubble() called, isShowing: $isShowing")
+        if (isShowing) return
+
+        try {
+            floatingView = createFloatingBubbleView()
+
+            val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+
+            val density = resources.displayMetrics.density
+            val screenWidth = resources.displayMetrics.widthPixels
+            val screenHeight = resources.displayMetrics.heightPixels
+            val bubbleSize = (64 * density).toInt()
+            val rightMargin = (16 * density).toInt()
+            val bottomMargin = (160 * density).toInt()
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                layoutFlag,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                // TOP|START gravity: x/y always measure from top-left â€” drag math is intuitive
+                gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                // Initial position: bottom-right corner
+                x = screenWidth - bubbleSize - rightMargin
+                y = screenHeight - bubbleSize - bottomMargin
+            }
+
+            windowManager?.addView(floatingView, params)
+            isShowing = true
+            Log.d(TAG, "âœ… Bubble added to window at bottom-right")
+
+            setupTouchListener(params)
+            setupClickListener()
+
+            // Start the idle fade timer
+            scheduleFade()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "âŒ Error showing floating bubble", e)
+            isShowing = false
+        }
+    }
+
+    private fun createFloatingBubbleView(): View {
+        val density = resources.displayMetrics.density
+        val bubbleSize = (64 * density).toInt()
+        val iconSize = (56 * density).toInt()
+        val badgeSize = (24 * density).toInt()
+
+        val container = FrameLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(bubbleSize, bubbleSize)
+        }
+
+        // Ripple ring â€” sits behind the icon
+        rippleView = View(this).apply {
+            layoutParams = FrameLayout.LayoutParams(bubbleSize, bubbleSize).apply {
+                gravity = android.view.Gravity.CENTER
+            }
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#80FF6B00"))
+            }
+            visibility = View.GONE
+        }
+        container.addView(rippleView)
+
+        // App icon bubble
+        bubbleIcon = ImageView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(iconSize, iconSize).apply {
+                gravity = android.view.Gravity.CENTER
+            }
+            setImageDrawable(packageManager.getApplicationIcon(applicationInfo))
+            elevation = 8f
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#FF6B00"))
+            }
+            setPadding(8, 8, 8, 8)
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
+            }
+            clipToOutline = true
+        }
+        container.addView(bubbleIcon)
+
+        // Notification badge (top-right corner)
+        notificationBadge = TextView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(badgeSize, badgeSize).apply {
+                gravity = android.view.Gravity.TOP or android.view.Gravity.END
+            }
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.RED)
+            }
+            gravity = android$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶åeÔôÚèHœ‚`İ¶f{Fo©Yò¿Ôó@00uMb’z-ëìXI$&ÂgfÖú¶7Ó´Şu|'K.ÌoP
+PİÀùFË.Ğıoûò9B<~. ’ïÅË[’´˜Ë<Ù­„$¯•¢·ä{1¹A•.òbKxºL ¯İ·'¯u8n5 ’ºe ,]ñH©–’ÆV¨ŒWwÃ$ùCƒel¹“|zys«™KŠi-ğqÊİ¬bk,wnGÿâ;¥  ~ÖeÉrÍ’‰ÜÔ~'1`Vâ¦«¹-*[ÉñLÔKÄ'2@ŸÜşĞä»ª ²n‘Íß2¸Nß ˆÆ¶µG•¢ói/U¢µ'Eï@¦`Hæ¹˜;J•¼¼ÜÅ+Jén#»¼‚6Ú´—Ä¹G•ü¡NÒGğ'—Z!öáí¸‰Wi»NJ @óàšAûÜZ|ª[¨ï$q}iÒ·µQbtTEC$œ’m…Îmo“LÒDüÜ;˜%gÏ?wêÁÅ·øîùovH0õÉa‡5£Ú*î Ø’ÃÌlÍ››S iyä”rÕO7ª“%L]İ×%±ºÇhk ¶«·÷>v1­HB£®±ßŞÚd\(eoIx¢>3´6BS%ÌØá“(
+œÛf$Ãhıé¿¶å

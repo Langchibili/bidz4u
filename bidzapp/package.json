@@ -1,0 +1,49 @@
+{
+    "name": "smaiapp",
+    "main": "index.ts",
+    "version": "1.0.0",
+    "scripts": {
+        "start": "expo start",
+        "android": "expo run:android",
+        "ios": "expo run:ios",
+        "web": "expo start --web"
+    },
+    "dependencies": {
+        "@react-native-community/netinfo": "^11.4.1",
+        "expo": "~54.0.33",
+        "expo-application": "^7.0.8",
+        "expo-asset": "~12.0.12",
+        "expo-audio": "~1.1.1",
+        "expo-av": "^16.0.8",
+        "expo-battery": "~10.0.8",
+        "expo-constants": "^18.0.13",
+        "expo-dev-client": "~6.0.20",
+        "expo-device": "^8.0.10",
+        "expo-draw-over": "file:./modules/expo-draw-over",
+        "expo-intent-launcher": "^13.0.8",
+        "expo-linear-gradient": "~15.0.8",
+        "expo-location": "^19.0.8",
+        "expo-notifications": "^0.32.16",
+        "expo-random": "^14.0.1",
+        "expo-secure-store": "~15.0.8",
+        "expo-status-bar": "~3.0.9",
+        "expo-system-ui": "~6.0.9",
+        "expo-task-manager": "^14.0.9",
+        "expo-video": "~3.0.16",
+        "react": "19.1.0",
+        "react-native": "0.81.5",
+        "react-native-battery-optimization-check": "^1.0.8",
+        "react-native-reanimated": "~4.1.1",
+        "react-native-safe-area-context": "~5.6.0",
+        "react-native-webview": "13.15.0",
+        "react-native-worklets": "0.5.1",
+        "socket.io-client": "^4.8.3"
+    },
+    "devDependencies": {
+        "@types/react": "~19.1.0",
+        "babel-plugin-module-resolver": "^5.0.2",
+        "babel-preset-expo": "^54.0.10",
+        "typescript": "~5.9.2"
+    },
+    "private": true
+}

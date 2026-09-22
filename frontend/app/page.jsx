@@ -22,8 +22,8 @@ export default function Home() {
   }, [hydrated, isAuthenticated, router]);
 
   useEffect(() => {
-    // populate[bids][fields][0]=id keeps the bid-count payload light — we only
-    // need array length, not full bid records, for the feed view.
+    // AuctionCard fetches each bid count from /bids using a relation filter, so
+    // the feed does not load the full bid collection for every item.
     //
     // filters[actIsDraft][$eq]=false is explicit defense-in-depth: draft
     // listings default to actAuctionStatus='scheduled' (not 'active'), so
@@ -32,7 +32,7 @@ export default function Home() {
     // the only thing keeping drafts off the public feed.
     apiClient
       .get(
-        '/auction-items?filters[actAuctionStatus][$eq]=active&filters[actIsDraft][$eq]=false&populate[actImages][fields][0]=url&populate[actImages][fields][1]=formats&populate[bids][fields][0]=id&sort=createdAt:desc'
+        '/auction-items?filters[actAuctionStatus][$eq]=active&filters[actIsDraft][$eq]=false&populate[actImages][fields][0]=url&populate[actImages][fields][1]=formats&populate[itemOriginCountry][fields][0]=countryName&populate[itemOriginCountry][fields][1]=countryCode&sort=createdAt:desc'
       )
       .then((res) => setItems(res?.data || []))
       .catch((err) => console.error('Failed to load auctions', err))

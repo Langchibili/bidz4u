@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="64dp"
+    android:layout_height="64dp">
+
+    <!-- Ripple Effect (behind) -->
+    <View
+        android:id="@+id/ripple_view"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:background="@drawable/ripple_circle"
+        android:visibility="gone" />
+
+    <!-- Main Bubble -->
+    <ImageView
+        android:id="@+id/bubble_icon"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bubble_background"
+        android:padding="12dp"
+        android:src="@drawable/ic_bubble_car"
+        android:contentDescription="Floating bubble"
+        android:elevation="8dp" />
+
+    <!-- Notification Badge -->
+    <TextView
+        android:id="@+id/notification_badge"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="top|end"
+        android:background="@drawable/badge_background"
+        android:gravity="center"
+        android:text="1"
+        android:textColor="@android:color/white"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        android:elevation="10dp" />
+</FrameLayout>
