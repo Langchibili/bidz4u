@@ -26,6 +26,7 @@ import { useSocket, getDisplayedAuctionPrice, getDisplayedAuctionStatus, useView
 import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
 import { formatCurrency } from '@/Functions';
 import BottomNav from '@/components/BottomNav';
+import Bidz4uPayModal from '@/components/Bidz4uPayModal';
 import { CUSTOM_THEME_COLORS, STORAGE_KEYS } from '@/Constants';
 
 export default function AuctionDetailPage() {
@@ -49,6 +50,8 @@ export default function AuctionDetailPage() {
   const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
   const [acceptingPrice, setAcceptingPrice] = useState(false);
   const [acceptError, setAcceptError] = useState('');
+  const [isWinner, setIsWinner] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   // What the VIEWER types into the bid box is in THEIR OWN currency
   // (bidAmountLocal — bid.place converts it server-side into the auction's
@@ -69,6 +72,7 @@ export default function AuctionDetailPage() {
   // param — and only connects once the item has finished loading. See
   // UIDTYPE_AUDIT.md for the full endpoint-by-endpoint breakdown.
   const numericItemId = apiClient.resolveId(item, 'id');
+  const currentUserId = apiClient.resolveId(user, 'id');
 
   const live = useSocket(numericItemId, {
     userId: apiClient.resolveId(user, 'id'),
@@ -135,6 +139,25 @@ export default function AuctionDetailPage() {
     };
   }, [numericItemId, live.lastEvent]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!numericItemId || !currentUserId) {
+      setIsWinner(false);
+      return () => { cancelled = true; };
+    }
+
+    apiClient
+      .get(`/auction-items/${encodeURIComponent(routeDocumentId)}/winner`)
+      .then((res) => {
+        if (!cancelled) setIsWinner(res?.winner === true);
+      })
+      .catch(() => {
+        if (!cancelled) setIsWinner(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [numericItemId, currentUserId, routeDocumentId, live.lastEvent]);
+
   // Flash gold whenever a new bid lands over the socket
   useEffect(() => {
     if (live.lastEvent?.type === 'bid:placed') {
@@ -165,7 +188,6 @@ export default function AuctionDetailPage() {
   const locationLabel = item?.actTown && isDifferentCountry
     ? `${item.actTown}, ${itemCountryName}`
     : item?.actTown || (isDifferentCountry ? itemCountryName : '');
-  const currentUserId = apiClient.resolveId(user, 'id');
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
@@ -422,6 +444,22 @@ const handleAcceptPrice = async () => {
           {displayedStatus === 'delisted_forfeited' && 'The winner forfeited — item re-listed.'}
         </Alert>
       )}
+
+      {displayedStatus === 'payment_pending' && isWinner && (
+        <Button fullWidth variant="contained" color="secondary" onClick={() => setPaymentOpen(true)} sx={{ mb: 2 }}>
+          Pay for auction
+        </Button>
+      )}
+
+      <Bidz4uPayModal
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        amount={displayedPrice}
+        currency={viewerCurrencyCode}
+        relatedEntityId={numericItemId}
+        phoneCode={countryConfig?.savedPhoneCode}
+        onSuccess={() => setPaymentOpen(false)}
+      />
 
       <Dialog open={acceptDialogOpen} onClose={() => !acceptingPrice && setAcceptDialogOpen(false)}>
         <DialogTitle>Accept price?</DialogTitle>

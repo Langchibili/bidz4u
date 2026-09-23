@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SmaiApp",
-    "slug": "smaiapp",
+    "name": "Bidz4u",
+    "slug": "bidz4u",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,9 +15,9 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Okra App needs your location to connect you with nearby riders and navigate to pickup/dropoff points.",
-          "locationAlwaysPermission": "Okra App needs background location access to receive ride requests while you use other apps.",
-          "locationWhenInUsePermission": "Okra App needs your location to show nearby drivers and estimate fares.",
+          "locationAlwaysAndWhenInUsePermission": "Bidz4u uses your location to support auction delivery coordination.",
+          "locationAlwaysPermission": "Bidz4u uses background location for delivery coordination.",
+          "locationWhenInUsePermission": "Bidz4u uses your location for delivery coordination.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
@@ -26,12 +26,12 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#FF6B00",
+          "color": "#F59E0B",
           "sounds": [
-            "./assets/sounds/okra_ride_request_1.wav"
+            "./assets/sounds/okra_ride_request_2.mpeg"
           ],
           "androidMode": "default",
-          "androidCollapsedTitle": "Okra Rides"
+          "androidCollapsedTitle": "Bidz4u"
         }
       ],
       "./plugins/withAndroidForegroundService.js",
@@ -45,7 +45,7 @@
       "expo-asset"
     ],
     "android": {
-      "package": "com.smaiapp",
+      "package": "com.bidz4u.app",
       "versionCode": 1,
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -73,7 +73,7 @@
       }
     },
     "ios": {
-      "bundleIdentifier": "com.smaiapp",
+      "bundleIdentifier": "com.bidz4u.app",
       "buildNumber": "1.0.0",
       "supportsTablet": false,
       "infoPlist": {
@@ -85,16 +85,16 @@
           "fetch",
           "remote-notification"
         ],
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Okra App needs background location access to receive ride requests while you use other apps.",
-        "NSLocationWhenInUseUsageDescription": "Okra App needs your location to show nearby drivers and estimate fares.",
-        "NSLocationAlwaysUsageDescription": "Okra App needs background location access to connect you with riders.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Bidz4u uses background location for delivery coordination.",
+        "NSLocationWhenInUseUsageDescription": "Bidz4u uses your location for delivery coordination.",
+        "NSLocationAlwaysUsageDescription": "Bidz4u uses background location for delivery coordination.",
         "UIBackgroundLocationIndicator": true,
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "extra": {
       "eas": {
-        "projectId": "9dbb3dbf-f0c1-44fb-86df-e4681a1771cf"
+        "projectId": "YOUR_BIDZ4U_EXPO_PROJECT_ID"
       }
     },
     "owner": "vectorfinancelimited"

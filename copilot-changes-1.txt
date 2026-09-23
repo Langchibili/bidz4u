@@ -1,0 +1,201 @@
+Bidz4u Change Log
+=================
+
+File: copilot-changes-1.txt
+Date: 2026-09-23
+
+This document records the Bidz4u changes made during this session. Changes were limited to the bidz4u project folder.
+
+1. Auction feed and country population
+--------------------------------------
+
+- Updated the auction feed query in frontend/app/page.jsx.
+- Added itemOriginCountry population with countryName and countryCode.
+- Preserved active-auction and non-draft filters.
+- Preserved image population and createdAt descending sort.
+- Removed full bid population from the feed because bid counts are fetched separately.
+
+2. Bid counting
+---------------
+
+- Updated frontend/components/AuctionCard.jsx.
+- Updated frontend/app/auction/[id]/page.jsx.
+- Bid counts now come from the /bids endpoint using the auctionItem relation filter.
+- The request uses a one-item page and pagination[withCount]=true.
+- The UI reads meta.pagination.total.
+- Added loading, zero-bid, and unavailable-bid states.
+- Bid counts refresh when the shared socket publishes a new event, including bid:placed.
+- Removed temporary bid-count debug logging.
+
+3. Auction detail page
+----------------------
+
+- Populated itemOriginCountry on the auction detail request.
+- Added conditional town and country display.
+- The country is displayed beside the town only when the listing country differs from the viewer country.
+- Added live bid count display before the converted-currency note.
+- Fixed a null actTown access that caused a TypeError while the auction item was loading.
+
+4. Seller ownership and accept-price flow
+-----------------------------------------
+
+- Added an owner-only Accept price action to AuctionCard.
+- Added an owner-only Accept price action to the auction detail page.
+- Added confirmation dialogs with the message:
+  "Are you sure you want to accept this price? This will stop any more offers coming in."
+- Added backend POST /auction-items/:id/accept-price.
+- The backend verifies the authenticated user is the listing owner.
+- The backend requires an active auction and an existing winning bidder.
+- Accepting a price changes actAuctionStatus to payment_pending.
+- Added socket notification behavior when a seller accepts a price.
+- Owners do not see the bidding form.
+- Added a backend guard preventing owners from bidding on their own listings.
+
+5. Ownership endpoint
+---------------------
+
+- Added authenticated GET /auction-items/:id/mine?userId=<user id>.
+- Added auction-item.mine controller method.
+- The endpoint returns { mine: true } or { mine: false }.
+- It supports numeric auction ids and Strapi documentId values.
+- It verifies that the query userId matches the authenticated JWT user.
+- The auction detail page and AuctionCard use this endpoint instead of relying on a populated seller relation.
+- Removed seller population from the auction detail and home feed queries.
+- This avoids the invalid seller.role population error.
+
+6. Winner detection and payment validation
+------------------------------------------
+
+- Added authenticated GET /auction-items/:id/winner.
+- Added auction-item.winner controller method.
+- The endpoint identifies whether the authenticated user is the current winning bidder.
+- Added winner-only validation to POST /bidz4upay/initiate for winnerpay requests.
+- Winner payments require a related auction item.
+- Winner payments require the auction to be in payment_pending status.
+- Invalid amounts and unauthorized winner payments are rejected server-side.
+
+7. Bidz4u payment UI
+--------------------
+
+- Added frontend/components/Bidz4uPayModal.jsx.
+- The modal follows the existing Bidz4u payment gateway flow instead of creating a new gateway API.
+- It submits to /bidz4upay/initiate with purpose=winnerpay.
+- It polls /bidz4upay/status/:reference.
+- Added submitting, polling, success, failure, and timeout states.
+- Added phone number and mobile-money operator inputs.
+- Added the Pay for auction action to the auction detail page for the authenticated winner.
+- Backend gateway selection remains controlled by the configured country settings and existing Pawapay/Lenco adapter factory.
+
+8. Socket live updates
+----------------------
+
+- Existing auction socket state continues to handle bid:placed, auction:extended, auction:closed, and bid:forfeited.
+- Seller acceptance emits auction:closed.
+- Seller acceptance also emits payment:required to the winning user.
+- Added emitPaymentRequired to backend/src/services/socketService.ts.
+- Added payment:required to the socket server relay whitelist.
+- Payment events can now reach both browser and native-device namespaces.
+
+9. React Native WebView bridge
+-----------------------------
+
+- Added frontend/lib/contexts/ReactNativeWrapper.jsx.
+- Added frontend/lib/hooks/useNativeApp.jsx.
+- Added frontend/lib/contexts/NativeServicesBootstrap.jsx.
+- Updated frontend/lib/contexts/ContextProviders.jsx.
+- The bridge detects React Native WebView execution.
+- Added request/response messaging with request ids and timeouts.
+- Added event subscription support.
+- Added native permission request and permission check methods.
+- Added native service initialization after authentication.
+- Added native notification forwarding support.
+- Added support for native service commands used by the Bidz4u app.
+
+10. Native Bidz4u app migration
+------------------------------
+
+Updated bidz4u/bidzapp without changing the overall folder structure.
+
+- Renamed the native application identity from SmartMenu/SmaiApp to Bidz4u.
+- Updated app name and slug in app.json.
+- Updated Android package name to com.bidz4u.app.
+- Updated iOS bundle identifier to com.bidz4u.app.
+- Updated frontend, backend, and socket URL constants for Bidz4u.
+- Changed the WebView target from the old owner frontend name to bidder.
+- Replaced restaurant/order/table socket event constants with auction and payment events.
+- Added native events for bid placement, auction extension, auction closure, payment required, payment success, and payment failure.
+- Added native reconnect and disconnect commands.
+- Updated AppContent.tsx to forward auction and payment events into the WebView.
+- Removed active rendering of restaurant order and waiter-call modals.
+- Updated DeviceSocketService.ts for Bidz4u auction/payment events.
+- Updated BackgroundService.ts to register bidder/seller device types instead of owner/employee types.
+- Updated NotificationService.ts to use generic Bidz4u notifications.
+- Updated PermissionManager.ts to use the Bidz4u Android package id.
+- Updated logger branding to Bidz4u.
+- Updated AudioService.ts to use a Bidz4u bid-alert sound key.
+- Updated OfflineScreen.tsx branding from Okra to Bidz4u.
+- Updated permission guidance text from Okra Rides to Bidz4u.
+- Corrected the native package-lock package name.
+- Corrected the socket server package entrypoint separately from the native app.
+
+11. Native device socket registration
+-------------------------------------
+
+- Added device registration handling to bidz4u/sockets/index.js.
+- Native devices can register with device:register.
+- Added device:register:success and device:register:error responses.
+- Devices join user:<userId> and device:<deviceId> rooms.
+- Added device heartbeat tracking.
+- Added duplicate-device session replacement.
+- Added device:session-replaced event support.
+- Added cleanup of device registry entries on disconnect.
+- Updated native DeviceSocketService.ts to send heartbeats and handle session replacement.
+
+12. Backend device model and security
+-------------------------------------
+
+- Added notificationToken to the device schema.
+- Added platform to the device schema.
+- Added appVersion to the device schema.
+- Added isActive to the device schema.
+- Added currentLocation to the users-permissions user schema.
+- Device registration now derives ownership from ctx.state.user.id.
+- Device registration rejects attempts to register devices for another user.
+- Device update, listing, removal, permission, and location routes now require authentication.
+- Device management methods verify the authenticated user owns the device.
+- Native device metadata is saved during registration.
+- Generic device CRUD routes now require authentication.
+
+13. Socket server maintenance
+-----------------------------
+
+- Added payment:required to the Strapi socket relay whitelist.
+- Corrected sockets/package.json so start and dev use the actual root index.js file.
+- Confirmed the socket server JavaScript syntax with node --check.
+
+14. Validation performed
+------------------------
+
+- Frontend production build completed successfully.
+- Backend production build completed successfully.
+- Frontend diagnostics passed for the modified pages and components.
+- Backend diagnostics passed for modified controllers, routes, schemas, and socket service.
+- Native TypeScript source diagnostics passed for the checked files.
+- Socket server syntax validation passed.
+
+15. Configuration still required
+--------------------------------
+
+The following values are placeholders or environment-specific and must be configured before producing a native release build:
+
+- bidzapp/src/utils/constants.ts: EXPO_PUBLIC_PROJECT_ID.
+- bidzapp/app.json: expo.extra.eas.projectId.
+- Local Bidz4u IP addresses in bidzapp/src/utils/constants.ts.
+- Production Bidz4u frontend, backend, and socket URLs.
+- Correct notification sound assets and Expo notification configuration for the release build.
+- Native dependencies must be installed before running a full Expo TypeScript/build validation.
+
+16. Scope note
+--------------
+
+No files outside the bidz4u folder were intentionally modified.

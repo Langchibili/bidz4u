@@ -385,6 +385,28 @@ export default factories.createCoreController('api::auction-item.auction-item', 
     }
   },
 
+  async winner(ctx) {
+    try {
+      const userId = ctx.state.user?.id;
+      const { id } = ctx.params;
+      if (!userId) return ctx.unauthorized('Login required');
+
+      const item = await strapi.db.query('api::auction-item.auction-item').findOne({
+        where: { id },
+        populate: { currentWinningBuyer: true },
+      });
+      const itemByDocumentId = item || await strapi.db.query('api::auction-item.auction-item').findOne({
+        where: { documentId: id },
+        populate: { currentWinningBuyer: true },
+      });
+
+      return ctx.send({ winner: itemByDocumentId?.currentWinningBuyer?.id === userId });
+    } catch (error) {
+      console.error('Error checking auction winner:', error);
+      ctx.internalServerError('Failed to check auction winner');
+    }
+  },
+
   async acceptPrice(ctx) {
     try {
       const userId = ctx.state.user?.id;
@@ -408,6 +430,12 @@ export default factories.createCoreController('api::auction-item.auction-item', 
 
       const socketService = (await import('../../../services/socketService')).default;
       socketService.emitAuctionClosed(item.id, item.currentWinningBuyer.id);
+      socketService.emitPaymentRequired(
+        item.currentWinningBuyer.id,
+        item.id,
+        Number(item.actCurrentHighestPriceNative),
+        item.actNativeCurrencyCode
+      );
 
       ctx.send({ success: true, data: updated });
     } catch (error) {

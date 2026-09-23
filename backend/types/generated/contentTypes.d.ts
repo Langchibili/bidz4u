@@ -877,17 +877,21 @@ export interface ApiDeviceDevice extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    appVersion: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     deviceId: Schema.Attribute.String;
     deviceInfo: Schema.Attribute.JSON;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
       'api::device.device'
     > &
       Schema.Attribute.Private;
+    notificationToken: Schema.Attribute.String;
+    platform: Schema.Attribute.Enumeration<['android', 'ios', 'web']>;
     publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1494,6 +1498,7 @@ export interface PluginUsersPermissionsUser
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    currentLocation: Schema.Attribute.JSON;
     deletedAt: Schema.Attribute.DateTime;
     devices: Schema.Attribute.Relation<'oneToMany', 'api::device.device'>;
     deviceToken: Schema.Attribute.String;

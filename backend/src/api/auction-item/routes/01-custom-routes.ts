@@ -13,6 +13,12 @@ export default {
       config: { auth: {} },
     },
     {
+      method: "GET",
+      path: "/auction-items/:id/winner",
+      handler: "auction-item.winner",
+      config: { auth: {} },
+    },
+    {
       method: "POST",
       path: "/auction-items/:id/accept-price",
       handler: "auction-item.acceptPrice",

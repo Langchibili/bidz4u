@@ -3,7 +3,7 @@ import NotificationService from './NotificationService';
 import AudioService from './AudioService';
 import { logger } from '../utils/logger';
 
-interface ServiceConfig { deviceId: string; userId: string | number; frontendName: string; socketServerUrl: string; }
+interface ServiceConfig { deviceId: string; userId: string | number; frontendName: 'bidder' | 'seller'; socketServerUrl: string; }
 
 class BackgroundService {
   private isRunning = false;
@@ -20,7 +20,7 @@ class BackgroundService {
 
     await DeviceSocketService.registerDevice({
       deviceId: config.deviceId, userId: config.userId,
-      userType: config.frontendName === 'owner' ? 'owner' : 'employee',
+      userType: config.frontendName,
       frontendName: config.frontendName, notificationToken, deviceInfo, socketServerUrl: config.socketServerUrl,
     });
 
@@ -33,16 +33,6 @@ class BackgroundService {
     await AudioService.stopAlert();
     await NotificationService.cancelAll();
     this.isRunning = false;
-  }
-
-  async showOrderAlert(orderData: any): Promise<void> {
-    await AudioService.playAlert('order_alert');
-    await NotificationService.showOrderNotification(orderData);
-  }
-
-  async showWaiterCallAlert(callData: any): Promise<void> {
-    await AudioService.playAlert('waiter_call');
-    await NotificationService.showWaiterCallNotification(callData);
   }
 
   isServicesRunning(): boolean { return this.isRunning; }

@@ -83,10 +83,14 @@ export default factories.createCoreController('api::device.device', ({ strapi })
   // ========================
 
   async registerDevices(ctx) {
+    const authenticatedUserId = ctx.state.user?.id;
+    if (!authenticatedUserId) return ctx.unauthorized('Login required');
     const { userId, devices } = ctx.request.body;
     if (!Array.isArray(devices)) return ctx.badRequest('Devices array is required');
+    if (userId && Number(userId) !== Number(authenticatedUserId)) return ctx.forbidden('You can only register your own devices');
+    const ownerId = authenticatedUserId;
 
-    const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId);
+    const user = await strapi.entityService.findOne('plugin::users-permissions.user', ownerId);
     if (!user) return ctx.notFound('User not found');
 
     const registeredDevices = [];
@@ -110,12 +114,15 @@ export default factories.createCoreController('api::device.device', ({ strapi })
         const updated = await strapi.entityService.update('api::device.device', existing[0].id, {
           data: {
             notificationToken,
+            platform: deviceInfo?.platform,
+            appVersion: deviceInfo?.appVersion,
+            isActive: true,
             deviceInfo: { ...((existing[0].deviceInfo as Record<string, any>) || {}), ...baseDeviceInfo },
-            user: userId,
+            user: ownerId,
           },
         });
         await strapi.db.query('plugin::users-permissions.user').update({
-          where: { id: userId },
+          where: { id: ownerId },
           data: { activeDevice: existing[0].id, devices: { connect: [existing[0].id] } },
         });
         registeredDevices.push(updated);
@@ -124,12 +131,15 @@ export default factories.createCoreController('api::device.device', ({ strapi })
           data: {
             deviceId,
             notificationToken,
+            platform: deviceInfo?.platform,
+            appVersion: deviceInfo?.appVersion,
+            isActive: true,
             deviceInfo: { ...baseDeviceInfo, registeredAt: new Date().toISOString() },
-            user: userId,
+            user: ownerId,
           },
         });
         await strapi.db.query('plugin::users-permissions.user').update({
-          where: { id: userId },
+          where: { id: ownerId },
           data: { devices: { connect: [created.id] }, activeDevice: created.id },
         });
         registeredDevices.push(created);
@@ -142,6 +152,8 @@ export default factories.createCoreController('api::device.device', ({ strapi })
   // ─── UPDATED: uses mapProviderService for priority-based geocoding ─────────
   async updateUserCurrentLocation(ctx) {
     try {
+      const authenticatedUserId = ctx.state.user?.id;
+      if (!authenticatedUserId) return ctx.unauthorized('Login required');
       const { deviceId, location } = ctx.request.body;
       if (!deviceId) return ctx.badRequest('Device ID is required');
       if (!location || typeof location !== 'object') return ctx.badRequest('Location object is required');
@@ -155,6 +167,7 @@ export default factories.createCoreController('api::device.device', ({ strapi })
 
       if (!device) return ctx.notFound('Device not found');
       if (!device.user) return ctx.badRequest('Device is not associated with a user');
+      if (device.user.id !== authenticatedUserId) return ctx.forbidden('Device does not belong to this user');
 
       let locationDetails: any = {
         latitude: location.latitude,
@@ -236,6 +249,9 @@ export default factories.createCoreController('api::device.device', ({ strapi })
 
   async updateDevice(ctx) {
     const { userId, deviceId } = ctx.params;
+    const authenticatedUserId = ctx.state.user?.id;
+    if (!authenticatedUserId) return ctx.unauthorized('Login required');
+    if (Number(userId) !== Number(authenticatedUserId)) return ctx.forbidden('You can only update your own device');
     const updateData = ctx.request.body;
     try {
       const device = await strapi.db.query('api::device.device').findOne({
@@ -272,6 +288,9 @@ export default factories.createCoreController('api::device.device', ({ strapi })
 
   async getUserDevices(ctx) {
     const { userId } = ctx.params;
+    const authenticatedUserId = ctx.state.user?.id;
+    if (!authenticatedUserId) return ctx.unauthorized('Login required');
+    if (Number(userId) !== Number(authenticatedUserId)) return ctx.forbidden('You can only view your own devices');
     try {
       const user = await strapi.db.query('plugin::users-permissions.user').findOne({ where: { id: userId } });
       if (!user) return ctx.notFound('User not found');
@@ -285,6 +304,9 @@ export default factories.createCoreController('api::device.device', ({ strapi })
 
   async removeDevice(ctx) {
     const { userId, deviceId } = ctx.params;
+    const authenticatedUserId = ctx.state.user?.id;
+    if (!authenticatedUserId) return ctx.unauthorized('Login required');
+    if (Number(userId) !== Number(authenticatedUserId)) return ctx.forbidden('You can only remove your own device');
     try {
       const device = await strapi.db.query('api::device.device').findOne({ where: { deviceId }, populate: ['user'] });
       if (!device) return ctx.notFound('Device not found');
@@ -299,9 +321,12 @@ export default factories.createCoreController('api::device.device', ({ strapi })
 
   async checkDevicePermissions(ctx) {
     const { deviceId } = ctx.params;
+    const authenticatedUserId = ctx.state.user?.id;
+    if (!authenticatedUserId) return ctx.unauthorized('Login required');
     try {
-      const device = await strapi.db.query('api::device.device').findOne({ where: { deviceId } });
+      const device = await strapi.db.query('api::device.device').findOne({ where: { deviceId }, populate: ['user'] });
       if (!device) return ctx.notFound('Device not found');
+      if (device.user?.id !== authenticatedUserId) return ctx.forbidden('Device does not belong to this user');
       const hasPermissions = !!(
         device.deviceInfo?.permissions && Object.keys(device.deviceInfo.permissions).length > 0
       );

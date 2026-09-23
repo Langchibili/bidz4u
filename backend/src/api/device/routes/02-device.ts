@@ -4,32 +4,32 @@ export default {
       method: 'GET',
       path: '/devices',
       handler: 'device.find',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
     {
       method: 'POST',
       path: '/devices',
       handler: 'device.create',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
     // ─── 5. Single generic param (:id) ──────────────────────────────────────
     {
       method: 'GET',
       path: '/devices/:id',
       handler: 'device.findOne',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
     {
       method: 'PUT',
       path: '/devices/:id',
       handler: 'device.update',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
     {
       method: 'DELETE',
       path: '/devices/:id',
       handler: 'device.delete',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
   ],
 };

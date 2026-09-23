@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { StatusBar, Platform, AppState, StyleSheet, View, BackHandler, Image, Linking } from 'react-native';
+import { StatusBar, StyleSheet, BackHandler, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import NetInfo from '@react-native-community/netinfo';
@@ -13,14 +13,11 @@ import AudioService from './src/services/AudioService';
 import { getDeviceInfo } from './src/utils/device-info';
 import { logger } from './src/utils/logger';
 import { SOCKET_EVENTS, WEBVIEW_EVENTS, CONSTANTS } from './src/utils/constants';
-import { OrderAlertModal } from './src/components/OrderAlertModal';
-import { WaiterCallAlertModal } from './src/components/WaiterCallAlertModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ConnectionLostBanner } from './src/components/ConnectionLostBanner';
 import OfflineScreen from './src/components/OfflineScreen';
 
-const API_URL = CONSTANTS.BACKEND_URL;
-const FRONTEND_URL = CONSTANTS.FRONTEND_URLS.owner;
+const FRONTEND_URL = CONSTANTS.FRONTEND_URLS.bidder;
 
 export default function AppContent() {
   const webViewRef = useRef<WebView>(null);
@@ -32,87 +29,34 @@ export default function AppContent() {
 
   const deviceIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string | number | null>(null);
-  const frontendNameRef = useRef<string | null>(null); // 'owner' | 'employee'
-
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<any>(null);
-  const [showCallModal, setShowCallModal] = useState(false);
-  const [currentCall, setCurrentCall] = useState<any>(null);
+  const frontendNameRef = useRef<string | null>(null);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (showOrderModal) { setShowOrderModal(false); return true; }
-      if (showCallModal) { setShowCallModal(false); return true; }
       if (is404) { setIs404(false); webViewRef.current?.injectJavaScript(`window.location = ""`); return true; }
       if (canGoBack && webViewRef.current) { webViewRef.current.goBack(); return true; }
       return false;
     });
     return () => backHandler.remove();
-  }, [showOrderModal, showCallModal, is404, canGoBack]);
+  }, [is404, canGoBack]);
 
   const sendToWebView = useCallback((data: any) => {
     webViewRef.current?.postMessage(JSON.stringify({ type: data.type, payload: data.payload ?? {} }));
   }, []);
 
-  const handleAcceptOrder = async (orderId: string | number) => {
-    setShowOrderModal(false);
-    try {
-      const { deviceId } = await getDeviceInfo();
-      await fetch(`${API_URL}/devices/acceptorder/${deviceId}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, status: 'accepted' }),
-      });
-      setCurrentOrder(null);
-    } catch (e) { logger.error('Accept order error:', e); }
-  };
-
-  const handleDismissOrder = (orderId: string | number) => { setShowOrderModal(false); setCurrentOrder(null); };
-
-  const handleAcknowledgeCall = async (callId: string | number) => {
-    setShowCallModal(false);
-    try {
-      const { deviceId } = await getDeviceInfo();
-      await fetch(`${API_URL}/devices/acknowledgecall/${deviceId}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callId }),
-      });
-      setCurrentCall(null);
-    } catch (e) { logger.error('Acknowledge call error:', e); }
-  };
-
-  const handleDismissCall = (callId: string | number) => { setShowCallModal(false); setCurrentCall(null); };
-
   const setupSocketListeners = useCallback(() => {
-    DeviceSocketService.on(SOCKET_EVENTS.ORDER.NEW, async (data: any) => {
-      await BackgroundService.showOrderAlert(data);
-      setCurrentOrder(data);
-      setShowOrderModal(true);
-      sendToWebView({ type: WEBVIEW_EVENTS.ORDER_NEW, payload: data });
-    });
-
-    DeviceSocketService.on(SOCKET_EVENTS.ORDER.STATUS_UPDATED, (data: any) => {
-      sendToWebView({ type: WEBVIEW_EVENTS.ORDER_STATUS_UPDATED, payload: data });
-    });
-
-    DeviceSocketService.on(SOCKET_EVENTS.WAITER_CALL.NEW, async (data: any) => {
-      await BackgroundService.showWaiterCallAlert(data);
-      setCurrentCall(data);
-      setShowCallModal(true);
-      sendToWebView({ type: WEBVIEW_EVENTS.WAITER_CALL_NEW, payload: data });
-    });
-
-    DeviceSocketService.on(SOCKET_EVENTS.WAITER_CALL.ACKNOWLEDGED, (data: any) => {
-      sendToWebView({ type: WEBVIEW_EVENTS.WAITER_CALL_ACKNOWLEDGED, payload: data });
-    });
-
-    DeviceSocketService.on(SOCKET_EVENTS.TABLE.STATUS_UPDATED, (data: any) => {
-      sendToWebView({ type: WEBVIEW_EVENTS.TABLE_STATUS_UPDATED, payload: data });
-    });
+    DeviceSocketService.on(SOCKET_EVENTS.AUCTION.BID_PLACED, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.BID_PLACED, payload: data }));
+    DeviceSocketService.on(SOCKET_EVENTS.AUCTION.EXTENDED, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.AUCTION_EXTENDED, payload: data }));
+    DeviceSocketService.on(SOCKET_EVENTS.AUCTION.CLOSED, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.AUCTION_CLOSED, payload: data }));
+    DeviceSocketService.on(SOCKET_EVENTS.PAYMENT.REQUIRED, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.PAYMENT_REQUIRED, payload: data }));
+    DeviceSocketService.on(SOCKET_EVENTS.PAYMENT.SUCCESS, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.PAYMENT_SUCCESS, payload: data }));
+    DeviceSocketService.on(SOCKET_EVENTS.PAYMENT.FAILED, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.PAYMENT_FAILED, payload: data }));
 
     DeviceSocketService.on(SOCKET_EVENTS.NOTIFICATION.NEW, async (data: any) => {
       await NotificationService.show(data);
       sendToWebView({ type: WEBVIEW_EVENTS.NOTIFICATION_NEW, payload: data });
     });
+    DeviceSocketService.on(SOCKET_EVENTS.DEVICE.SESSION_REPLACED, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.SESSION_REPLACED, payload: data }));
 
     DeviceSocketService.on(SOCKET_EVENTS.CONNECTED, () => sendToWebView({ type: WEBVIEW_EVENTS.SOCKET_CONNECTED, payload: {} }));
     DeviceSocketService.on(SOCKET_EVENTS.DISCONNECTED, (d: any) => sendToWebView({ type: WEBVIEW_EVENTS.SOCKET_DISCONNECTED, payload: d }));
@@ -130,15 +74,14 @@ export default function AppContent() {
 
   const handleInitializeServices = async (payload: any) => {
     try {
-      const { userId, frontendName, socketServerUrl } = payload;
+      const { userId, socketServerUrl } = payload;
       const deviceInfo = await getDeviceInfo();
       const deviceId = deviceInfo.deviceId;
-      deviceIdRef.current = deviceId; userIdRef.current = userId; frontendNameRef.current = frontendName;
+      deviceIdRef.current = deviceId; userIdRef.current = userId; frontendNameRef.current = 'bidder';
       LocationService.setDeviceId(deviceId);
-      const permissions = await PermissionManager.requestCriticalPermissions();
-      if (!permissions.location) return { success: false, error: 'Location permission required' };
+      const permissions = { location: await PermissionManager.check('location'), notification: await PermissionManager.requestNotificationPermission() };
       const socketUrl = socketServerUrl || CONSTANTS.DEVICE_SOCKET_URL;
-      const started = await BackgroundService.start({ deviceId, userId, frontendName, socketServerUrl: socketUrl });
+      const started = await BackgroundService.start({ deviceId, userId, frontendName: 'bidder', socketServerUrl: socketUrl });
       if (!started) return { success: false, error: 'Failed to start services' };
       setupSocketListeners();
       return { success: true, deviceId, permissions, socketConnected: DeviceSocketService.isConnected() };
@@ -157,6 +100,8 @@ export default function AppContent() {
         case 'GET_CURRENT_LOCATION': response = await LocationService.getCurrentLocation() || { error: 'Could not get location' }; break;
         case 'SHOW_NOTIFICATION': await NotificationService.show(payload); response = { success: true }; break;
         case 'PLAY_AUDIO': await AudioService.playAlert(payload.soundFile); response = { success: true }; break;
+        case 'RECONNECT_SOCKET': response = { success: await BackgroundService.start({ deviceId: deviceIdRef.current || '', userId: userIdRef.current || '', frontendName: 'bidder', socketServerUrl: payload.socketServerUrl || CONSTANTS.DEVICE_SOCKET_URL }) }; break;
+        case 'DISCONNECT_SOCKET': await BackgroundService.stop(); response = { success: true }; break;
         case 'LOG_DATA': console.log('Log from webview', payload); response = { success: true }; break;
         default: response = { error: 'Unknown message type' };
       }
@@ -191,8 +136,6 @@ export default function AppContent() {
           onHttpError={(e) => { if (e.nativeEvent.statusCode === 404) setIs404(true); }}
         />
       </SafeAreaView>
-      <OrderAlertModal open={showOrderModal} order={currentOrder} onAccept={handleAcceptOrder} onDismiss={handleDismissOrder} />
-      <WaiterCallAlertModal open={showCallModal} call={currentCall} onAcknowledge={handleAcknowledgeCall} onDismiss={handleDismissCall} />
     </LinearGradient>
   );
 }

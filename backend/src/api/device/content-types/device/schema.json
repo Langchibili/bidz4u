@@ -22,6 +22,20 @@
     },
     "deviceInfo": {
       "type": "json"
+    },
+    "notificationToken": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "enumeration",
+      "enum": ["android", "ios", "web"]
+    },
+    "appVersion": {
+      "type": "string"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
     }
   }
 }

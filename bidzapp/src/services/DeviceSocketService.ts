@@ -7,7 +7,7 @@ const S = SOCKET_EVENTS;
 type EventHandler = (data: any) => void;
 
 interface DeviceRegistration {
-  deviceId: string; userId: string | number; userType: 'owner' | 'employee';
+  deviceId: string; userId: string | number; userType: 'bidder' | 'seller';
   frontendName: string; notificationToken: string | null; deviceInfo: any; socketServerUrl: string;
 }
 
@@ -62,18 +62,18 @@ class DeviceSocketService {
 
     this.socket.on(S.DEVICE.REGISTER_SUCCESS, (d) => this.triggerEvent('device_registered', d));
     this.socket.on(S.DEVICE.REGISTER_ERROR, (e) => this.triggerEvent('device_registration_error', e));
+    this.socket.on(S.DEVICE.SESSION_REPLACED, (d) => this.triggerEvent(S.DEVICE.SESSION_REPLACED, d));
 
-    this.socket.on(S.ORDER.NEW, (d) => this.triggerEvent(S.ORDER.NEW, d));
-    this.socket.on(S.ORDER.STATUS_UPDATED, (d) => this.triggerEvent(S.ORDER.STATUS_UPDATED, d));
-    this.socket.on(S.WAITER_CALL.NEW, (d) => this.triggerEvent(S.WAITER_CALL.NEW, d));
-    this.socket.on(S.WAITER_CALL.ACKNOWLEDGED, (d) => this.triggerEvent(S.WAITER_CALL.ACKNOWLEDGED, d));
-    this.socket.on(S.TABLE.STATUS_UPDATED, (d) => this.triggerEvent(S.TABLE.STATUS_UPDATED, d));
+    this.socket.on(S.AUCTION.BID_PLACED, (d) => this.triggerEvent(S.AUCTION.BID_PLACED, d));
+    this.socket.on(S.AUCTION.EXTENDED, (d) => this.triggerEvent(S.AUCTION.EXTENDED, d));
+    this.socket.on(S.AUCTION.CLOSED, (d) => this.triggerEvent(S.AUCTION.CLOSED, d));
+    this.socket.on(S.PAYMENT.REQUIRED, (d) => this.triggerEvent(S.PAYMENT.REQUIRED, d));
+    this.socket.on(S.PAYMENT.SUCCESS, (d) => this.triggerEvent(S.PAYMENT.SUCCESS, d));
+    this.socket.on(S.PAYMENT.FAILED, (d) => this.triggerEvent(S.PAYMENT.FAILED, d));
 
     this.socket.on(S.NOTIFICATION.NEW, (d) => this.triggerEvent(S.NOTIFICATION.NEW, d));
     this.socket.on(S.NOTIFICATION.BROADCAST, (d) => this.triggerEvent(S.NOTIFICATION.BROADCAST, d));
     this.socket.on(S.SYSTEM.ANNOUNCEMENT, (d) => this.triggerEvent(S.SYSTEM.ANNOUNCEMENT, d));
-    this.socket.on(S.OWNER.SESSION_REPLACED, (d) => this.triggerEvent(S.OWNER.SESSION_REPLACED, d));
-    this.socket.on(S.EMPLOYEE.SESSION_REPLACED, (d) => this.triggerEvent(S.EMPLOYEE.SESSION_REPLACED, d));
     this.socket.on(S.CONNECTION.PONG, () => { });
   }
 
@@ -107,7 +107,10 @@ class DeviceSocketService {
   private startHeartbeat() {
     this.stopHeartbeat();
     this.heartbeatInterval = setInterval(() => {
-      if (this.socket && this.isConnectedState) this.socket.emit(S.CONNECTION.PING, { timestamp: Date.now() });
+      if (this.socket && this.isConnectedState) {
+        this.socket.emit(S.CONNECTION.PING, { timestamp: Date.now() });
+        if (this.deviceRegistration) this.socket.emit(S.DEVICE.HEARTBEAT, { deviceId: this.deviceRegistration.deviceId });
+      }
     }, 30000) as unknown as number;
   }
   private stopHeartbeat() {

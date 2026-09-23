@@ -58,6 +58,9 @@ class SocketService {
   emitPaymentFailed(userId: number, amount: number, reference: string) {
     return this.emit('payment:failed', { userId, amount, reference });
   }
+  emitPaymentRequired(userId: number, auctionItemId: number, amount: number, currency: string) {
+    return this.emit('payment:required', { userId, auctionItemId, amount, currency });
+  }
   emitHapticPulse(userId: number, pattern: 'outbid' | 'final_60s' | 'won') {
     return this.emit('device:haptic', { userId, pattern });
   }

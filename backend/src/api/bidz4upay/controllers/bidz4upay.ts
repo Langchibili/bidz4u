@@ -291,6 +291,20 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
       if (!['walletdeposit', 'winnerpay'].includes(purpose)) return ctx.badRequest('Invalid purpose');
 
       const numAmount = parseFloat(amount);
+      if (!Number.isFinite(numAmount) || numAmount <= 0) return ctx.badRequest('amount must be a positive number');
+      if (purpose === 'winnerpay') {
+        if (!relatedEntityId) return ctx.badRequest('relatedEntityId is required for winnerpay');
+        const auctionItem = await strapi.db.query('api::auction-item.auction-item').findOne({
+          where: { id: relatedEntityId },
+          populate: { currentWinningBuyer: true },
+        });
+        if (!auctionItem || auctionItem.currentWinningBuyer?.id !== userId) {
+          return ctx.forbidden('Only the winning bidder can make this payment');
+        }
+        if (auctionItem.actAuctionStatus !== 'payment_pending') {
+          return ctx.badRequest('This auction is not awaiting payment');
+        }
+      }
       const user = await getUserWithCountry(userId);
       const userCountry = user?.country;
       const countryCode = (userCountry?.countryCode || 'zm').toLowerCase();

@@ -47,7 +47,7 @@ class PermissionManager {
   async openAppSettings(): Promise<void> {
     try {
       if (Platform.OS === 'ios') await Linking.openURL('app-settings:');
-      else await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS, { data: 'package:com.smartmenu.staff' });
+      else await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS, { data: 'package:com.bidz4u.app' });
     } catch (error) {
       logger.error('Error opening settings:', error);
       Alert.alert('Error', 'Could not open settings.');

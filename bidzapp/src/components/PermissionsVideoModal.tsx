@@ -847,7 +847,7 @@ export default function PermissionsVideoModal({
               <>
                 <Text style={styles.promptSubtitle}>
                   See a short guide showing exactly how to set the app to run
-                  properly in the background so Okra Rides keeps working when
+                  properly in the background so Bidz4u keeps working when
                   you're not actively using it.
                 </Text>
                 <TouchableOpacity
@@ -874,7 +874,7 @@ export default function PermissionsVideoModal({
               <>
                 <Text style={styles.promptSubtitle}>
                   See a short guide showing exactly how to enable the required permissions
-                  for Okra Rides to work properly.
+                  for Bidz4u to work properly.
                 </Text>
                 <TouchableOpacity
                   style={styles.videoBtnPrimaryWrapper}

@@ -114,8 +114,8 @@ export const OfflineScreen: React.FC<OfflineScreenProps> = ({ onRetry }) => {
               onError={(e) => console.error('❌ Logo image failed to load:', e.nativeEvent)}
             />
           </View>
-          <Text style={styles.brandName}>Okra</Text>
-          <Text style={styles.brandSub}>Technologies</Text>
+          <Text style={styles.brandName}>Bidz4u</Text>
+          <Text style={styles.brandSub}>Auctions</Text>
         </Animated.View>
 
         {/* ── Card ── */}
@@ -180,7 +180,7 @@ export const OfflineScreen: React.FC<OfflineScreenProps> = ({ onRetry }) => {
         {/* ── Footer ── */}
         <Animated.Text style={[styles.footer, { opacity: cardAnim }]}>
           Powered by{' '}
-          <Text style={styles.footerBrand}>OkraPay</Text>
+          <Text style={styles.footerBrand}>Bidz4u</Text>
         </Animated.Text>
 
       </SafeAreaView>

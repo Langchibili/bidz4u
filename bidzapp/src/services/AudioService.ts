@@ -2,8 +2,7 @@ import { createAudioPlayer, setAudioModeAsync, AudioPlayer, InterruptionMode } f
 import { logger } from '../utils/logger';
 
 const SOUND_SOURCES = {
-  order_alert: require('../../assets/sounds/order_alert.wav'),
-  waiter_call: require('../../assets/sounds/waiter_call.wav'),
+  bid_alert: require('../../assets/sounds/okra_ride_request_2.mpeg'),
 };
 type SoundType = keyof typeof SOUND_SOURCES;
 

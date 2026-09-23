@@ -2,10 +2,10 @@
   "name": "sockets",
   "version": "1.0.0",
   "description": "bidz4u.com real-time auction socket server (main + device namespaces)",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

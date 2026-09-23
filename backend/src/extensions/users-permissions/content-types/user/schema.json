@@ -87,6 +87,9 @@
     "deviceToken": {
       "type": "string"
     },
+    "currentLocation": {
+      "type": "json"
+    },
     "refreshToken": {
       "type": "string",
       "private": true

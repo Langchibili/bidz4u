@@ -7,13 +7,13 @@ export default {
       method: 'POST',
       path: '/devices/register',
       handler: 'device.registerDevices',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
     {
       method: 'POST',
       path: '/devices/updatecurrentloc',
       handler: 'device.updateUserCurrentLocation',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
 
     // ─── 2. Literal prefix + single param ───────────────────────────────────
@@ -40,7 +40,7 @@ export default {
       method: 'GET',
       path: '/devices/user/:userId',
       handler: 'device.getUserDevices',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
     
     // {
@@ -61,20 +61,20 @@ export default {
       method: 'GET',
       path: '/device/:deviceId/permissions',
       handler: 'device.checkDevicePermissions',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
     // ─── 6. Two generic params (:userId/:deviceId) ──────────────────────────
     {
       method: 'PUT',
       path: '/devices/:userId/:deviceId',
       handler: 'device.updateDevice',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
     {
       method: 'DELETE',
       path: '/devices/:userId/:deviceId',
       handler: 'device.removeDevice',
-      config: { policies: [], middlewares: [] },
+      config: { auth: {}, policies: [], middlewares: [] },
     },
   ],
 };

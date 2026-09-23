@@ -8,7 +8,7 @@ const LOG_LEVELS = {
 const CURRENT_LOG_LEVEL = __DEV__ ? LOG_LEVELS.debug : LOG_LEVELS.info;
 
 class Logger {
-  private prefix: string = '[OkraRides]';
+  private prefix: string = '[Bidz4u]';
 
   debug(message: string, ...args: any[]) {
     if (CURRENT_LOG_LEVEL <= LOG_LEVELS.debug) {

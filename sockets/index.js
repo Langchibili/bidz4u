@@ -41,6 +41,7 @@ const connections = {
   admins: new Map(),    // adminId -> Set<socket.id>
   sockets: new Map(),   // socket.id -> { nsp, type, id, auctionItemId }
 };
+const devices = new Map(); // deviceId -> { userId, socketId, namespace, lastSeen }
  
 function addConnection(map, key, socketId) {
   if (!map.has(key)) map.set(key, new Set());
@@ -118,6 +119,41 @@ function bindNamespace(nsp, label) {
     }
  
     socket.emit(`${label}:connected`, { socketId: socket.id });
+
+    if (label === 'device') {
+      socket.on('device:register', (registration = {}) => {
+        const deviceId = String(registration.deviceId || '');
+        const registeredUserId = String(registration.userId || userId || '');
+        if (!deviceId || !registeredUserId) {
+          socket.emit('device:register:error', { message: 'deviceId and userId are required' });
+          return;
+        }
+
+        const previous = devices.get(deviceId);
+        if (previous && previous.socketId !== socket.id) {
+          deviceNsp.to(previous.socketId).emit('device:session-replaced', { deviceId, userId: registeredUserId });
+          deviceNsp.sockets.get(previous.socketId)?.disconnect(true);
+        }
+
+        socket.join(`user:${registeredUserId}`);
+        socket.join(`device:${deviceId}`);
+        devices.set(deviceId, {
+          userId: registeredUserId,
+          socketId: socket.id,
+          namespace: label,
+          lastSeen: Date.now(),
+          platform: registration.deviceInfo?.platform || null,
+        });
+        socket.emit('device:register:success', { deviceId, userId: registeredUserId });
+        logger.info(`[device] registered device ${deviceId} for user ${registeredUserId}`);
+      });
+
+      socket.on('device:heartbeat', ({ deviceId: heartbeatDeviceId } = {}) => {
+        const key = String(heartbeatDeviceId || '');
+        const current = devices.get(key);
+        if (current?.socketId === socket.id) current.lastSeen = Date.now();
+      });
+    }
  
     // ── Client-initiated room management (switching between auction pages) ──
     socket.on('auction:watch', ({ auctionItemId: newId }) => {
@@ -141,6 +177,9 @@ function bindNamespace(nsp, label) {
         removeConnection(map, info.id, socket.id);
         connections.sockets.delete(socket.id);
       }
+      for (const [deviceId, device] of devices.entries()) {
+        if (device.socketId === socket.id) devices.delete(deviceId);
+      }
     });
  
     socket.on('error', (error) => {
@@ -158,10 +197,12 @@ const STRAPI_ALLOWED_EVENTS = new Set([
   'bid:forfeited',
   'payment:success',
   'payment:failed',
+  'payment:required',
   'device:haptic',
   'notification:new',
   'notification:broadcast',
   'admin:announcement',
+  'device:session-replaced',
 ]);
  
 function bindStrapiRelay(strapiSocket) {
