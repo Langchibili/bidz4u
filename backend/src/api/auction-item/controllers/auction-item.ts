@@ -346,6 +346,76 @@ export default factories.createCoreController('api::auction-item.auction-item', 
     }
   },
 
+  async mine(ctx) {
+    try {
+      const authenticatedUserId = ctx.state.user?.id;
+      const requestedUserId = Number(ctx.query.userId);
+      const { id } = ctx.params;
+
+      if (!authenticatedUserId) return ctx.unauthorized('Login required');
+      if (!Number.isInteger(requestedUserId) || requestedUserId !== authenticatedUserId) {
+        return ctx.send({ mine: false });
+      }
+
+      const item = await strapi.db.query('api::auction-item.auction-item').findOne({
+        where: { id },
+        select: ['id'],
+      });
+      if (!item) {
+        const itemByDocumentId = await strapi.db.query('api::auction-item.auction-item').findOne({
+          where: { documentId: id },
+          select: ['id'],
+        });
+        if (!itemByDocumentId) return ctx.send({ mine: false });
+        const ownedByDocumentId = await strapi.db.query('api::auction-item.auction-item').findOne({
+          where: { id: itemByDocumentId.id, seller: authenticatedUserId },
+          select: ['id'],
+        });
+        return ctx.send({ mine: Boolean(ownedByDocumentId) });
+      }
+
+      const ownedItem = await strapi.db.query('api::auction-item.auction-item').findOne({
+        where: { id: item.id, seller: authenticatedUserId },
+        select: ['id'],
+      });
+      return ctx.send({ mine: Boolean(ownedItem) });
+    } catch (error) {
+      console.error('Error checking auction ownership:', error);
+      ctx.internalServerError('Failed to check auction ownership');
+    }
+  },
+
+  async acceptPrice(ctx) {
+    try {
+      const userId = ctx.state.user?.id;
+      const { id } = ctx.params;
+      if (!userId) return ctx.unauthorized('Login required');
+
+      const item = await strapi.db.query('api::auction-item.auction-item').findOne({
+        where: { id },
+        populate: { seller: true, currentWinningBuyer: true },
+      });
+      if (!item) return ctx.notFound('Auction item not found');
+      if (item.seller?.id !== userId) return ctx.forbidden('Only the listing owner can accept the price');
+      if (item.actAuctionStatus !== 'active') return ctx.badRequest('Auction is not active');
+      if (!item.currentWinningBuyer) return ctx.badRequest('There is no bid to accept');
+
+      const updated = await strapi.db.query('api::auction-item.auction-item').update({
+        where: { id },
+        data: { actAuctionStatus: 'payment_pending' },
+        populate: { seller: true, currentWinningBuyer: true },
+      });
+
+      const socketService = (await import('../../../services/socketService')).default;
+      socketService.emitAuctionClosed(item.id, item.currentWinningBuyer.id);
+
+      ctx.send({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error accepting auction price:', error);
+      ctx.internalServerError('Failed to accept auction price');
+    }
+  },
+
   // GET /auction-items/:userId/current-draft-id
   //
   // Returns the id of the requesting seller's in-progress draft, if any —

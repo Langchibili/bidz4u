@@ -36,7 +36,7 @@
 // countryName by whatever fetched `item` — see app/page.jsx's feed query.
 
 import { useEffect, useState } from 'react';
-import { Box, Typography, Chip } from '@mui/material';
+import { Box, Typography, Chip, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import PlaceIcon from '@mui/icons-material/PlaceOutlined';
 import { apiClient } from '@/lib/api/client';
@@ -47,7 +47,7 @@ import { useSocket, getDisplayedAuctionPrice, useViewerCurrencyRate } from '@/li
 import { CUSTOM_THEME_COLORS } from '@/Constants';
 
 export default function AuctionCard({ item, onClick }) {
-  const { countryConfig } = useAuth();
+  const { user, countryConfig } = useAuth();
   const viewerCurrencyCode = countryConfig?.savedCurrencyCode;
   const viewerCurrencySymbol = countryConfig?.savedCurrencySymbol || viewerCurrencyCode || '';
   const viewerCountryName = countryConfig?.savedCountryName;
@@ -64,6 +64,8 @@ export default function AuctionCard({ item, onClick }) {
   // polling fallback both key off this, not documentId. See the uidType
   // note at the top of lib/hooks/useSocket.jsx.
   const numericItemId = apiClient.resolveId(item, 'id');
+  const currentUserId = apiClient.resolveId(user, 'id');
+  const [isOwner, setIsOwner] = useState(false);
   const live = useSocket(numericItemId);
 
   const endTime = live.auctionEndTime || item.actListingTimeEnd;
@@ -71,6 +73,41 @@ export default function AuctionCard({ item, onClick }) {
   const thumbnail = item.actImages?.[0]?.formats?.thumbnail?.url || item.actImages?.[0]?.url;
   const [bidCount, setBidCount] = useState(null);
   const [bidCountFailed, setBidCountFailed] = useState(false);
+  const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
+  const [acceptingPrice, setAcceptingPrice] = useState(false);
+  const [acceptError, setAcceptError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!numericItemId || !currentUserId) {
+      setIsOwner(false);
+      return () => { cancelled = true; };
+    }
+
+    apiClient
+      .get(`/auction-items/${encodeURIComponent(numericItemId)}/mine?userId=${encodeURIComponent(currentUserId)}`)
+      .then((res) => {
+        if (!cancelled) setIsOwner(res?.mine === true);
+      })
+      .catch(() => {
+        if (!cancelled) setIsOwner(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [numericItemId, currentUserId]);
+
+  const handleAcceptPrice = async () => {
+    try {
+      setAcceptingPrice(true);
+      setAcceptError('');
+      await apiClient.post(`/auction-items/${numericItemId}/accept-price`, {});
+      setAcceptDialogOpen(false);
+    } catch (err) {
+      setAcceptError(err.message || 'Failed to accept price');
+    } finally {
+      setAcceptingPrice(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +156,7 @@ export default function AuctionCard({ item, onClick }) {
     viewerCurrencyCode
   );
   const displayedPrice = Number(nativePrice) * rate;
+  const displayedStatus = live.auctionStatus || item.actAuctionStatus;
 
   const locationLabel = item.actTown && isDifferentCountry
     ? `${item.actTown}, ${itemCountryName}`
@@ -199,7 +237,38 @@ export default function AuctionCard({ item, onClick }) {
               ? 'Loading bids...'
               : `${bidCount} bid${bidCount === 1 ? '' : 's'}`}
         </Typography>
+
+        {isOwner && displayedStatus === 'active' && bidCount > 0 && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="secondary"
+            onClick={(event) => {
+              event.stopPropagation();
+              setAcceptDialogOpen(true);
+            }}
+            sx={{ mt: 1 }}
+          >
+            Accept price
+          </Button>
+        )}
       </Box>
+
+      <Dialog open={acceptDialogOpen} onClose={() => !acceptingPrice && setAcceptDialogOpen(false)}>
+        <DialogTitle>Accept price?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to accept this price? This will stop any more offers coming in.
+          </DialogContentText>
+          {acceptError && <Typography color="error" sx={{ mt: 2 }}>{acceptError}</Typography>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAcceptDialogOpen(false)} disabled={acceptingPrice}>No</Button>
+          <Button onClick={handleAcceptPrice} disabled={acceptingPrice} variant="contained" color="secondary">
+            {acceptingPrice ? 'Accepting...' : 'Yes'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

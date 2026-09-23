@@ -198,8 +198,10 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
 
       const auctionItem = await strapi.db.query('api::auction-item.auction-item').findOne({
         where: { id: auctionItemId },
+        populate: { seller: true },
       });
       if (!auctionItem) return ctx.notFound('Auction item not found');
+      if (auctionItem.seller?.id === user.id) return ctx.forbidden('You cannot bid on your own listing');
       if (auctionItem.actAuctionStatus !== 'active') return ctx.badRequest('Auction is not active');
 
       const auctionCurrency = auctionItem.actNativeCurrencyCode;

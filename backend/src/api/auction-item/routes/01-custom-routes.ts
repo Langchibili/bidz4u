@@ -8,6 +8,18 @@ export default {
     },
     {
       method: "GET",
+      path: "/auction-items/:id/mine",
+      handler: "auction-item.mine",
+      config: { auth: {} },
+    },
+    {
+      method: "POST",
+      path: "/auction-items/:id/accept-price",
+      handler: "auction-item.acceptPrice",
+      config: { auth: {} },
+    },
+    {
+      method: "GET",
       path: "/auction-items/:userId/current-draft-id",
       handler: "auction-item.currentDraftId",
       config: { auth: {} },

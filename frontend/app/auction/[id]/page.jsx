@@ -12,6 +12,11 @@ import {
   Alert,
   Chip,
   InputAdornment,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
 } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import PlaceIcon from '@mui/icons-material/PlaceOutlined';
@@ -41,6 +46,9 @@ export default function AuctionDetailPage() {
   const [flash, setFlash] = useState(false);
   const [bidCount, setBidCount] = useState(null);
   const [bidCountFailed, setBidCountFailed] = useState(false);
+  const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
+  const [acceptingPrice, setAcceptingPrice] = useState(false);
+  const [acceptError, setAcceptError] = useState('');
 
   // What the VIEWER types into the bid box is in THEIR OWN currency
   // (bidAmountLocal — bid.place converts it server-side into the auction's
@@ -76,8 +84,9 @@ export default function AuctionDetailPage() {
       setLoading(true);
       // Default core `findOne` — resolves the route param as documentId.
       const res = await apiClient.get(
-        `/auction-items/${routeDocumentId}?populate[actImages][populate]=*&populate[itemOriginCountry][fields][0]=countryName&populate[itemOriginCountry][fields][1]=countryCode&populate[seller][fields][0]=id&populate[seller][fields][1]=usrFullName&populate[seller][fields][2]=username`
+        `/auction-items/${routeDocumentId}?populate[actImages][populate]=*&populate[itemOriginCountry][fields][0]=countryName&populate[itemOriginCountry][fields][1]=countryCode`
       );
+      console.log('Fetched auction item', res);
       setItem(res?.data || res);
     } catch (err) {
       setError(err.message || 'Failed to load this auction');
@@ -156,6 +165,40 @@ export default function AuctionDetailPage() {
   const locationLabel = item?.actTown && isDifferentCountry
     ? `${item.actTown}, ${itemCountryName}`
     : item?.actTown || (isDifferentCountry ? itemCountryName : '');
+  const currentUserId = apiClient.resolveId(user, 'id');
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!numericItemId || !currentUserId) {
+      setIsOwner(false);
+      return () => { cancelled = true; };
+    }
+
+    apiClient
+      .get(`/auction-items/${encodeURIComponent(routeDocumentId)}/mine?userId=${encodeURIComponent(currentUserId)}`)
+      .then((res) => {
+        if (!cancelled) setIsOwner(res?.mine === true);
+      })
+      .catch(() => {
+        if (!cancelled) setIsOwner(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [numericItemId, currentUserId, routeDocumentId]);
+
+const handleAcceptPrice = async () => {
+    try {
+      setAcceptingPrice(true);
+      setAcceptError('');
+      await apiClient.post(`/auction-items/${numericItemId}/accept-price`, {});
+      setAcceptDialogOpen(false);
+    } catch (err) {
+      setAcceptError(err.message || 'Failed to accept price');
+    } finally {
+      setAcceptingPrice(false);
+    }
+  };
 
   const handlePlaceBid = async () => {
     setBidError('');
@@ -302,6 +345,18 @@ export default function AuctionDetailPage() {
               : `${bidCount} bid${bidCount === 1 ? '' : 's'}`}
         </Typography>
 
+        {isOwner && isActive && bidCount > 0 && (
+          <Button
+            fullWidth
+            variant="outlined"
+            color="secondary"
+            onClick={() => setAcceptDialogOpen(true)}
+            sx={{ mt: 2 }}
+          >
+            Accept price
+          </Button>
+        )}
+
         {isPriceReady && wasCurrencyConverted && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
             Originally listed in {nativeCurrencyCode} — converted to your currency
@@ -325,7 +380,7 @@ export default function AuctionDetailPage() {
         )}
       </Box>
 
-      {isActive && !timer.isExpired && (
+      {isActive && !timer.isExpired && !isOwner && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <TextField
             fullWidth
@@ -367,6 +422,22 @@ export default function AuctionDetailPage() {
           {displayedStatus === 'delisted_forfeited' && 'The winner forfeited — item re-listed.'}
         </Alert>
       )}
+
+      <Dialog open={acceptDialogOpen} onClose={() => !acceptingPrice && setAcceptDialogOpen(false)}>
+        <DialogTitle>Accept price?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to accept this price? This will stop any more offers coming in.
+          </DialogContentText>
+          {acceptError && <Typography color="error" sx={{ mt: 2 }}>{acceptError}</Typography>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAcceptDialogOpen(false)} disabled={acceptingPrice}>No</Button>
+          <Button onClick={handleAcceptPrice} disabled={acceptingPrice} variant="contained" color="secondary">
+            {acceptingPrice ? 'Accepting...' : 'Yes'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <BottomNav />
     </Box>
