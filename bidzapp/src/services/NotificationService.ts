@@ -23,7 +23,11 @@ class NotificationService {
     this.sendToWebView = sendToWebView;
     const { status } = await this.requestPermissions();
     if (status !== 'granted') { logger.warn('Notification permission not granted'); return; }
-    await this.registerForPushNotifications();
+    try {
+      await this.registerForPushNotifications();
+    } catch (error) {
+      logger.warn('Push token registration unavailable; socket notifications remain enabled', error);
+    }
     this.setupListeners();
   }
 

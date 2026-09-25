@@ -1,5 +1,5 @@
-//OkraApp\src\services\DeepLinkService.ts
-import { CONSTANTS } from '@utils/constants';
+// Bidz4u native deep-link service.
+import { CONSTANTS } from '../utils/constants';
 import { logger } from '../utils/logger';
 
 type WebViewSender = ((data: any) => void) | null;
@@ -18,33 +18,17 @@ class DeepLinkService {
       }
 
       let url = '';
-      const baseUrls = {
-        driver: CONSTANTS.FRONTEND_URLS.driver,
-        rider: CONSTANTS.FRONTEND_URLS.rider,
-        conductor: CONSTANTS.FRONTEND_URLS.conductor,
-        delivery: CONSTANTS.FRONTEND_URLS.delivery,
-      };
 
-      // Route based on notification type
       switch (data.type) {
-        case 'ride_request':
-          url = `${baseUrls.driver}/rides/${data.rideId}`;
+        case 'bid:placed':
+        case 'auction:extended':
+        case 'auction:closed':
+        case 'payment:required':
+          url = `${CONSTANTS.FRONTEND_URLS.bidder}/auction/${data.documentId || data.auctionItemDocumentId || data.auctionItemId}`;
           break;
-
-        case 'ride_started':
-          url = `${baseUrls.driver}/active-ride/${data.rideId}`;
-          break;
-
-        case 'ride_completed':
-          url = `${baseUrls.driver}/history/${data.rideId}`;
-          break;
-
-        case 'message':
-          url = `${baseUrls.driver}/messages/${data.conversationId}`;
-          break;
-
-        case 'payment_received':
-          url = `${baseUrls.driver}/earnings`;
+        case 'payment:success':
+        case 'payment:failed':
+          url = `${CONSTANTS.FRONTEND_URLS.bidder}/wallet`;
           break;
 
         case 'reconnect':
@@ -85,11 +69,10 @@ class DeepLinkService {
       }
 
       sendToWebView({
-        type: 'RIDE_REQUEST_ACTION',
+        type: 'AUCTION_ACTION',
         payload: {
           action,
-          rideId: data.rideId,
-          rideCode: data.rideCode,
+          auctionItemId: data.auctionItemId,
         },
       });
     } catch (error) {

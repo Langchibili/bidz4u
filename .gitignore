@@ -145,3 +145,48 @@ frontend/.vercel
 frontend/*.tsbuildinfo
 frontend/next-env.d.ts
 
+
+bidzapp/node_modules
+
+
+bidzapp/node_modules/
+
+# Expo
+bidzapp/.expo/
+bidzapp/dist/
+bidzapp/web-build/
+bidzapp/expo-env.d.ts
+
+# Native
+bidzapp/.kotlin/
+bidzapp/*.orig.*
+bidzapp/*.jks
+bidzapp/*.p8
+bidzapp/*.p12
+bidzapp/*.key
+bidzapp/*.mobileprovision
+
+# Metro
+bidzapp/.metro-health-check*
+
+# debug
+bidzapp/npm-debug.*
+bidzapp/yarn-debug.*
+bidzapp/yarn-error.*
+
+# macOS
+bidzapp/.DS_Store
+bidzapp/*.pem
+
+# local env files
+bidzapp/.env*.local
+
+# typescript
+bidzapp/*.tsbuildinfo
+bidzapp/AppleApptsx.txt
+bidzapp/dev-eas.txt
+
+# generated native folders
+bidzapp/ios
+bidzapp/android
+bidzapp/.env

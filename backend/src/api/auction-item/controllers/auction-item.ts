@@ -429,6 +429,7 @@ export default factories.createCoreController('api::auction-item.auction-item', 
       });
 
       const socketService = (await import('../../../services/socketService')).default;
+      const { notifyAuctionClosed } = await import('../../../services/auctionNotifications');
       socketService.emitAuctionClosed(item.id, item.currentWinningBuyer.id);
       socketService.emitPaymentRequired(
         item.currentWinningBuyer.id,
@@ -436,6 +437,13 @@ export default factories.createCoreController('api::auction-item.auction-item', 
         Number(item.actCurrentHighestPriceNative),
         item.actNativeCurrencyCode
       );
+      await notifyAuctionClosed(strapi, {
+        auctionItemId: item.id,
+        sellerId: item.seller?.id,
+        winnerId: item.currentWinningBuyer.id,
+        amount: item.actCurrentHighestPriceNative,
+        currency: item.actNativeCurrencyCode,
+      });
 
       ctx.send({ success: true, data: updated });
     } catch (error) {

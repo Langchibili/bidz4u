@@ -13,7 +13,6 @@ module.exports = function withDrawOverPermission(config) {
     const permissionsToAdd = [
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.FOREGROUND_SERVICE',
-      'android.permission.FOREGROUND_SERVICE_LOCATION',
     ];
 
     permissionsToAdd.forEach((permission) => {
@@ -44,7 +43,6 @@ module.exports = function withDrawOverPermission(config) {
           'android:name': 'expo.modules.drawover.FloatingBubbleService',
           'android:enabled': 'true',
           'android:exported': 'false',
-          'android:foregroundServiceType': 'location',
         },
       });
     }

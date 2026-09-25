@@ -11,7 +11,7 @@ import BottomNav from '@/components/BottomNav';
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, hydrated } = useAuth();
+  const { isAuthenticated, hydrated, user } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,6 +22,13 @@ export default function Home() {
   }, [hydrated, isAuthenticated, router]);
 
   useEffect(() => {
+    if (!hydrated) return undefined;
+    if (!isAuthenticated()) {
+      setLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
     // AuctionCard fetches each bid count from /bids using a relation filter, so
     // the feed does not load the full bid collection for every item.
     //
@@ -34,12 +41,18 @@ export default function Home() {
       .get(
         '/auction-items?filters[actAuctionStatus][$eq]=active&filters[actIsDraft][$eq]=false&populate[actImages][fields][0]=url&populate[actImages][fields][1]=formats&populate[itemOriginCountry][fields][0]=countryName&populate[itemOriginCountry][fields][1]=countryCode&sort=createdAt:desc'
       )
-      .then((res) => setItems(res?.data || []))
+      .then((res) => {
+        if (!cancelled) setItems(res?.data || []);
+      })
       .catch((err) => console.error('Failed to load auctions', err))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-  if (!hydrated || loading) {
+    return () => { cancelled = true; };
+  }, [hydrated, isAuthenticated, user?.id]);
+
+  if (!hydrated) {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
         <CircularProgress color="secondary" />
@@ -53,21 +66,27 @@ export default function Home() {
         Live Auctions
       </Typography>
 
-      <Stack spacing={1.5}>
-        {items.map((item) => (
-          <AuctionCard
-            key={apiClient.resolveId(item)}
-            item={item}
-            // No currencySymbol prop — AuctionCard now sources currency from
-            // item.actNativeCurrencyCode directly, since prices are
-            // denominated per-listing, not in the viewer's own currency.
-            // Default core `findOne` (GET /auction-items/:id) resolves :id as
-            // documentId in Strapi v5 — apiClient.resolveId() defaults to
-            // documentId, so no override needed here. See UIDTYPE_AUDIT.md.
-            onClick={() => router.push(`/auction/${apiClient.resolveId(item)}`)}
-          />
-        ))}
-      </Stack>
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress color="secondary" size={28} />
+        </Box>
+      ) : (
+        <Stack spacing={1.5}>
+          {items.map((item) => (
+            <AuctionCard
+              key={apiClient.resolveId(item)}
+              item={item}
+              // No currencySymbol prop — AuctionCard now sources currency from
+              // item.actNativeCurrencyCode directly, since prices are
+              // denominated per-listing, not in the viewer's own currency.
+              // Default core `findOne` (GET /auction-items/:id) resolves :id as
+              // documentId in Strapi v5 — apiClient.resolveId() defaults to
+              // documentId, so no override needed here. See UIDTYPE_AUDIT.md.
+              onClick={() => router.push(`/auction/${apiClient.resolveId(item)}`)}
+            />
+          ))}
+        </Stack>
+      )}
 
       {items.length === 0 && (
         <Typography color="text.secondary">No active auctions right now — check back soon.</Typography>

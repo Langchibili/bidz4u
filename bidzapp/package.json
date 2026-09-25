@@ -22,7 +22,6 @@
         "expo-draw-over": "file:./modules/expo-draw-over",
         "expo-intent-launcher": "^13.0.8",
         "expo-linear-gradient": "~15.0.8",
-        "expo-location": "^19.0.8",
         "expo-notifications": "^0.32.16",
         "expo-random": "^14.0.1",
         "expo-secure-store": "~15.0.8",

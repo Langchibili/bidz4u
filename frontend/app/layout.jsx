@@ -1,15 +1,74 @@
-import ClientProviders from './ClientProviders';
+'use client';
 
-export const metadata = {
-  title: 'bidz4u',
-  description: 'Live pan-African auctions, escrow-protected.',
-};
+import { useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
+import ClientProviders from './ClientProviders';
+import { useAuth } from '@/lib/contexts/AuthContext';
+import { useReactNative } from '@/lib/contexts/ReactNativeWrapper';
+
+function AuthenticatedNativeServices({ children }) {
+  const { user, hydrated, isAuthenticated } = useAuth();
+  const { isNative, servicesInitialized, initializeNativeServices } = useReactNative();
+  const initializedUserId = useRef(null);
+  const userType = ['seller', 'seller-admin'].includes(String(user?.userType || user?.role?.name || '').toLowerCase())
+    ? 'seller'
+    : 'bidder';
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (
+      !hydrated ||
+      !isNative ||
+      !isAuthenticated() ||
+      !userId ||
+      (servicesInitialized && initializedUserId.current === userId)
+    ) {
+      return;
+    }
+
+    initializedUserId.current = userId;
+    initializeNativeServices(userId, userType).catch((error) => {
+      initializedUserId.current = null;
+      console.error('Failed to initialize native services', error);
+    });
+  }, [hydrated, initializeNativeServices, isAuthenticated, isNative, servicesInitialized, user?.id, userType]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!hydrated || isNative || !isAuthenticated() || !userId) return undefined;
+
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:3015/main-sockets';
+    const socket = io(socketUrl, {
+      query: { userId: String(userId), userType },
+      transports: ['websocket', 'polling'],
+    });
+
+    const handleNotification = (notification) => {
+      window.dispatchEvent(new CustomEvent('bidz4u:notification', { detail: notification }));
+      if (typeof window.Notification === 'function' && window.Notification.permission === 'granted') {
+        new window.Notification(notification.title || 'Bidz4u update', {
+          body: notification.body || 'You have a new auction update.',
+        });
+      }
+    };
+
+    socket.on('notification:new', handleNotification);
+    return () => {
+      socket.off('notification:new', handleNotification);
+      socket.disconnect();
+    };
+  }, [hydrated, isAuthenticated, isNative, user?.id, userType]);
+
+  return children;
+}
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body style={{ margin: 0 }}>
-        <ClientProviders>{children}</ClientProviders>
+        <ClientProviders>
+          <AuthenticatedNativeServices>{children}</AuthenticatedNativeServices>
+        </ClientProviders>
       </body>
     </html>
   );

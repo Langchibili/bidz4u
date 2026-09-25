@@ -6,7 +6,6 @@ import NetInfo from '@react-native-community/netinfo';
 
 import BackgroundService from './src/services/BackgroundService';
 import DeviceSocketService from './src/services/DeviceSocketService';
-import LocationService from './src/services/LocationService';
 import NotificationService from './src/services/NotificationService';
 import PermissionManager from './src/services/PermissionManager';
 import AudioService from './src/services/AudioService';
@@ -29,7 +28,9 @@ export default function AppContent() {
 
   const deviceIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string | number | null>(null);
-  const frontendNameRef = useRef<string | null>(null);
+  const frontendNameRef = useRef<'bidder' | 'seller'>('bidder');
+  const notificationInitializationRef = useRef<Promise<void> | null>(null);
+  const socketListenersReadyRef = useRef(false);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -62,10 +63,7 @@ export default function AppContent() {
     DeviceSocketService.on(SOCKET_EVENTS.DISCONNECTED, (d: any) => sendToWebView({ type: WEBVIEW_EVENTS.SOCKET_DISCONNECTED, payload: d }));
   }, [sendToWebView]);
 
-  useEffect(() => {
-    NotificationService.initialize(sendToWebView);
-    return () => NotificationService.cleanup();
-  }, [sendToWebView]);
+  useEffect(() => () => NotificationService.cleanup(), []);
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => setIsConnected(state.isConnected ?? false));
@@ -74,16 +72,27 @@ export default function AppContent() {
 
   const handleInitializeServices = async (payload: any) => {
     try {
-      const { userId, socketServerUrl } = payload;
+      const { userId, userType, socketServerUrl } = payload;
+      const frontendName: 'bidder' | 'seller' = userType === 'seller' ? 'seller' : 'bidder';
+      if (!notificationInitializationRef.current) {
+        notificationInitializationRef.current = NotificationService.initialize(sendToWebView);
+      }
+      try {
+        await notificationInitializationRef.current;
+      } catch (error) {
+        logger.warn('Notification setup failed; continuing with permissions and socket services', error);
+      }
       const deviceInfo = await getDeviceInfo();
       const deviceId = deviceInfo.deviceId;
-      deviceIdRef.current = deviceId; userIdRef.current = userId; frontendNameRef.current = 'bidder';
-      LocationService.setDeviceId(deviceId);
-      const permissions = { location: await PermissionManager.check('location'), notification: await PermissionManager.requestNotificationPermission() };
+      deviceIdRef.current = deviceId; userIdRef.current = userId; frontendNameRef.current = frontendName;
+      const permissions = { notification: await PermissionManager.requestNotificationPermission() };
+      if (!socketListenersReadyRef.current) {
+        setupSocketListeners();
+        socketListenersReadyRef.current = true;
+      }
       const socketUrl = socketServerUrl || CONSTANTS.DEVICE_SOCKET_URL;
-      const started = await BackgroundService.start({ deviceId, userId, frontendName: 'bidder', socketServerUrl: socketUrl });
+      const started = await BackgroundService.start({ deviceId, userId, frontendName, socketServerUrl: socketUrl });
       if (!started) return { success: false, error: 'Failed to start services' };
-      setupSocketListeners();
       return { success: true, deviceId, permissions, socketConnected: DeviceSocketService.isConnected() };
     } catch (e: any) { return { success: false, error: e.message }; }
   };
@@ -97,10 +106,9 @@ export default function AppContent() {
         case 'INITIALIZE_SERVICES': response = await handleInitializeServices(payload); break;
         case 'REQUEST_PERMISSION': response = { status: await PermissionManager.request(payload.permissionType) }; break;
         case 'CHECK_PERMISSION': response = { status: await PermissionManager.check(payload.permissionType) }; break;
-        case 'GET_CURRENT_LOCATION': response = await LocationService.getCurrentLocation() || { error: 'Could not get location' }; break;
         case 'SHOW_NOTIFICATION': await NotificationService.show(payload); response = { success: true }; break;
         case 'PLAY_AUDIO': await AudioService.playAlert(payload.soundFile); response = { success: true }; break;
-        case 'RECONNECT_SOCKET': response = { success: await BackgroundService.start({ deviceId: deviceIdRef.current || '', userId: userIdRef.current || '', frontendName: 'bidder', socketServerUrl: payload.socketServerUrl || CONSTANTS.DEVICE_SOCKET_URL }) }; break;
+        case 'RECONNECT_SOCKET': response = { success: await BackgroundService.start({ deviceId: deviceIdRef.current || '', userId: userIdRef.current || '', frontendName: frontendNameRef.current, socketServerUrl: payload.socketServerUrl || CONSTANTS.DEVICE_SOCKET_URL }) }; break;
         case 'DISCONNECT_SOCKET': await BackgroundService.stop(); response = { success: true }; break;
         case 'LOG_DATA': console.log('Log from webview', payload); response = { success: true }; break;
         default: response = { error: 'Unknown message type' };

@@ -38,18 +38,26 @@ export function AuthProvider({ children }) {
 
   // ── Load whatever was persisted from a previous session ──────────────────
   useEffect(() => {
-    loadUser();
-    if (typeof window !== 'undefined') {
-      try {
-        const savedCountry = localStorage.getItem(STORAGE_KEYS.COUNTRY_CONFIG);
-        const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-        if (savedCountry) setCountryConfig(JSON.parse(savedCountry));
-        if (savedSettings) setEffectiveSettings(JSON.parse(savedSettings));
-      } catch (e) {
-        console.error('Failed to hydrate country/settings from localStorage', e);
+    let active = true;
+
+    const hydrate = async () => {
+      await loadUser();
+      if (typeof window !== 'undefined') {
+        try {
+          const savedCountry = localStorage.getItem(STORAGE_KEYS.COUNTRY_CONFIG);
+          const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+          if (savedCountry) setCountryConfig(JSON.parse(savedCountry));
+          if (savedSettings) setEffectiveSettings(JSON.parse(savedSettings));
+        } catch (e) {
+          console.error('Failed to hydrate country/settings from localStorage', e);
+        }
       }
-    }
-    setHydrated(true);
+
+      if (active) setHydrated(true);
+    };
+
+    hydrate();
+    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

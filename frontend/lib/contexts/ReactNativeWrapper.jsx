@@ -80,11 +80,11 @@ export default function ReactNativeWrapper({ children }) {
     return () => handlersRef.current.get(type)?.delete(handler);
   }, []);
 
-  const initializeNativeServices = useCallback(async (userId) => {
+  const initializeNativeServices = useCallback(async (userId, userType = 'bidder') => {
     const result = await sendToNative('INITIALIZE_SERVICES', {
       userId,
-      userType: 'bidder',
-      frontendName: 'bidder',
+      userType,
+      frontendName: userType,
       socketServerUrl: process.env.NEXT_PUBLIC_DEVICE_SOCKET_URL,
     });
     setServicesInitialized(result?.success === true);

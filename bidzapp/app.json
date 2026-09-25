@@ -13,16 +13,6 @@
     },
     "plugins": [
       [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Bidz4u uses your location to support auction delivery coordination.",
-          "locationAlwaysPermission": "Bidz4u uses background location for delivery coordination.",
-          "locationWhenInUsePermission": "Bidz4u uses your location for delivery coordination.",
-          "isAndroidBackgroundLocationEnabled": true,
-          "isAndroidForegroundServiceEnabled": true
-        }
-      ],
-      [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
@@ -34,7 +24,6 @@
           "androidCollapsedTitle": "Bidz4u"
         }
       ],
-      "./plugins/withAndroidForegroundService.js",
       "./plugins/withDrawOverPermission.js",
       "./plugins/withBackgroundModes.js",
       "./plugins/withFullScreenNotification.js",
@@ -48,22 +37,14 @@
       "package": "com.bidz4u.app",
       "versionCode": 1,
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION",
         "WAKE_LOCK",
         "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "SYSTEM_ALERT_WINDOW",
         "POST_NOTIFICATIONS",
         "VIBRATE",
         "USE_FULL_SCREEN_INTENT",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
@@ -78,17 +59,11 @@
       "supportsTablet": false,
       "infoPlist": {
         "UIBackgroundModes": [
-          "location",
           "fetch",
           "remote-notification",
-          "location",
           "fetch",
           "remote-notification"
         ],
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Bidz4u uses background location for delivery coordination.",
-        "NSLocationWhenInUseUsageDescription": "Bidz4u uses your location for delivery coordination.",
-        "NSLocationAlwaysUsageDescription": "Bidz4u uses background location for delivery coordination.",
-        "UIBackgroundLocationIndicator": true,
         "ITSAppUsesNonExemptEncryption": false
       }
     },

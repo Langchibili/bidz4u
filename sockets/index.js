@@ -212,15 +212,16 @@ function bindStrapiRelay(strapiSocket) {
       return;
     }
  
+    // User-scoped events must be routed first. Some payment and notification
+    // payloads also include auctionItemId for context.
+    if (payload?.userId) {
+      emitToUser(payload.userId, event, payload);
+      return;
+    }
+
     // Auction-scoped events go to the auction room on both namespaces.
     if (payload?.auctionItemId) {
       emitToAuction(payload.auctionItemId, event, payload);
-      return;
-    }
- 
-    // User-scoped events go to that user's personal room on both namespaces.
-    if (payload?.userId) {
-      emitToUser(payload.userId, event, payload);
       return;
     }
  

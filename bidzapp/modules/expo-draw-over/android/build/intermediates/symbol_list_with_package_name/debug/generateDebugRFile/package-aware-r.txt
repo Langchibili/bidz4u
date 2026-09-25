@@ -1,0 +1,19 @@
+expo.modules.drawover
+drawable badge_background
+drawable bubble_background
+drawable ic_bubble_car
+drawable ic_notification
+drawable ripple_circle
+id accept_button
+id bubble_icon
+id decline_button
+id distance
+id dropoff_address
+id estimated_fare
+id notification_badge
+id pickup_address
+id ride_code
+id rider_name
+id ripple_view
+layout floating_bubble
+layout ride_request_overlay

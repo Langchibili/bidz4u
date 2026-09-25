@@ -4,13 +4,11 @@
 
 import { AuthProvider } from './AuthContext';
 import ReactNativeWrapper from './ReactNativeWrapper';
-import NativeServicesBootstrap from './NativeServicesBootstrap';
 
 export default function ContextProviders({ children }) {
   return (
     <ReactNativeWrapper>
       <AuthProvider>
-        <NativeServicesBootstrap />
         {children}
       </AuthProvider>
     </ReactNativeWrapper>

@@ -195,6 +195,7 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
       const { resolveSettingsForCountry } = await import('../../../services/settingsResolver');
       const { convertAmount } = await import('../../../services/currencyConversion');
       const socketService = (await import('../../../services/socketService')).default;
+      const { notifyBidPlaced } = await import('../../../services/auctionNotifications');
 
       const auctionItem = await strapi.db.query('api::auction-item.auction-item').findOne({
         where: { id: auctionItemId },
@@ -349,6 +350,14 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
         bidAmountLocalSnapshot: bidAmountLocal,
         bidLocalCurrencyCode: userCurrency,
         bidWasConverted,
+      });
+
+      await notifyBidPlaced(strapi, {
+        auctionItemId: auctionItem.id,
+        sellerId: auctionItem.seller?.id,
+        bidderId: user.id,
+        amount: bidAmountNative,
+        currency: auctionCurrency,
       });
 
       ctx.send({ status: true, bid });

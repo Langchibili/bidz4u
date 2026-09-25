@@ -16,6 +16,7 @@ import { STORAGE_KEYS } from '@/Constants';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:1343/api';
 const DEFAULT_UID_TYPE = 'documentId';
+const REQUEST_TIMEOUT_MS = 15000;
 
 let inMemoryToken = null;
 
@@ -94,11 +95,27 @@ async function request(method, path, body, uidType = DEFAULT_UID_TYPE) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s: ${path}`);
+      timeoutError.cause = error;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   let json = null;
   try {

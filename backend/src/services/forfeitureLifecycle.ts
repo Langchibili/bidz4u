@@ -2,11 +2,12 @@
 
 import { resolveSettingsForCountry } from './settingsResolver';
 import socketService from './socketService';
+import { notifyAuctionForfeited } from './auctionNotifications';
 
 export async function checkAndForfeitUnpaidWinners(strapi: any) {
   const pending = await strapi.db.query('api::auction-item.auction-item').findMany({
     where: { actAuctionStatus: 'payment_pending' },
-    populate: { currentWinningBuyer: { populate: ['country'] }, itemOriginCountry: true },
+    populate: { currentWinningBuyer: { populate: ['country'] }, seller: true, itemOriginCountry: true },
   });
 
   for (const item of pending) {
@@ -33,6 +34,13 @@ export async function checkAndForfeitUnpaidWinners(strapi: any) {
         data: { usrCoolDownUntil: coolDownUntil },
       });
       socketService.emitForfeiture(item.id, item.currentWinningBuyer.id);
+      await notifyAuctionForfeited(strapi, {
+        auctionItemId: item.id,
+        sellerId: item.seller?.id,
+        winnerId: item.currentWinningBuyer.id,
+        amount: item.actCurrentHighestPriceNative,
+        currency: item.actNativeCurrencyCode,
+      });
     }
   }
 }

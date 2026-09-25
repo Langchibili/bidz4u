@@ -47,7 +47,6 @@ export const NATIVE_EVENTS = {
   INITIALIZE_SERVICES: 'INITIALIZE_SERVICES',
   REQUEST_PERMISSION: 'REQUEST_PERMISSION',
   CHECK_PERMISSION: 'CHECK_PERMISSION',
-  GET_CURRENT_LOCATION: 'GET_CURRENT_LOCATION',
   SHOW_NOTIFICATION: 'SHOW_NOTIFICATION',
   PLAY_AUDIO: 'PLAY_AUDIO',
   RECONNECT_SOCKET: 'RECONNECT_SOCKET',
@@ -58,12 +57,12 @@ export const NATIVE_EVENTS = {
 export const CONSTANTS = {
   APP_NAME: 'Bidz4u',
   APP_VERSION: '1.0.0',
-  DEVICE_SOCKET_URL: environment === "local" ? "http://10.197.174.23:3015/device-sockets" : "https://socket.bidz4u.com/device-sockets",
-  MAIN_SOCKET_URL: environment === "local" ? "http://10.197.174.23:3015/main-sockets" : "https://socket.bidz4u.com/main-sockets",
-  BACKEND_URL: environment === "local" ? "http://10.197.174.23:1343/api" : "https://api.bidz4u.com/api",
+  DEVICE_SOCKET_URL: environment === "local" ? "http://192.168.43.207:3015/device-sockets" : "https://socket.bidz4u.com/device-sockets",
+  MAIN_SOCKET_URL: environment === "local" ? "http://192.168.43.207:3015/main-sockets" : "https://socket.bidz4u.com/main-sockets",
+  BACKEND_URL: environment === "local" ? "http://192.168.43.207:1367/api" : "https://api.bidz4u.com/api",
 
   FRONTEND_URLS: {
-    bidder: environment === "local" ? "http://10.197.174.23:3000" : "https://bidz4u.com",
+    bidder: environment === "local" ? "http://192.168.43.207:3000" : "https://bidz4u.com",
   },
 
   NOTIFICATION: { HEARTBEAT_INTERVAL: 30000 },

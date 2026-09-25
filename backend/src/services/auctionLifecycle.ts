@@ -1,6 +1,7 @@
 // backend/src/services/auctionLifecycle.ts
 
 import socketService from './socketService';
+import { notifyAuctionClosed } from './auctionNotifications';
 
 export async function checkAndCloseExpiredAuctions(strapi: any) {
   const now = new Date();
@@ -16,5 +17,12 @@ export async function checkAndCloseExpiredAuctions(strapi: any) {
       data: { actAuctionStatus: hasWinner ? 'payment_pending' : 'delisted_no_bids' },
     });
     socketService.emitAuctionClosed(item.id, item.currentWinningBuyer?.id || null);
+    await notifyAuctionClosed(strapi, {
+      auctionItemId: item.id,
+      sellerId: item.seller?.id,
+      winnerId: item.currentWinningBuyer?.id || null,
+      amount: item.actCurrentHighestPriceNative,
+      currency: item.actNativeCurrencyCode,
+    });
   }
 }

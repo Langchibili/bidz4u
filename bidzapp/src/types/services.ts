@@ -1,14 +1,3 @@
-export interface LocationData {
-  lat: number;
-  lng: number;
-  accuracy: number;
-  altitude: number | null;
-  altitudeAccuracy: number | null;
-  heading: number | null;
-  speed: number | null;
-  timestamp: number;
-}
-
 export interface NotificationData {
   title: string;
   body: string;
