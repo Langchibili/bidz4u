@@ -8,9 +8,24 @@ import { checkAndForfeitUnpaidWinners } from './services/forfeitureLifecycle';
 export default {
   register({ strapi }: { strapi: any }) {},
 
-  bootstrap({ strapi }: { strapi: any }) {
+  async bootstrap({ strapi }: { strapi: any }) {
     socketService.connect();
     console.log('✅ Socket bridge initialized');
+
+    const authenticatedRole = await strapi.db.query('plugin::users-permissions.role').findOne({
+      where: { type: 'authenticated' },
+    });
+    if (authenticatedRole) {
+      const action = 'api::auction-item.auction-item.myListings';
+      const permission = await strapi.db.query('plugin::users-permissions.permission').findOne({
+        where: { action, role: authenticatedRole.id },
+      });
+      if (!permission) {
+        await strapi.db.query('plugin::users-permissions.permission').create({
+          data: { action, role: authenticatedRole.id },
+        });
+      }
+    }
 
     strapi.db.lifecycles.subscribe({
       models: ['plugin::users-permissions.user'],

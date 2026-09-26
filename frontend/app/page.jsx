@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Typography, CircularProgress, Stack } from '@mui/material';
+import { Box, Typography, Skeleton, Stack } from '@mui/material';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
 import AuctionCard from '@/components/AuctionCard';
@@ -54,8 +54,12 @@ export default function Home() {
 
   if (!hydrated) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
-        <CircularProgress color="secondary" />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
+        <Skeleton variant="text" width={210} height={48} />
+        <Stack spacing={1.5} sx={{ mt: 2 }}>
+          <Skeleton variant="rounded" height={112} />
+          <Skeleton variant="rounded" height={112} />
+        </Stack>
       </Box>
     );
   }
@@ -67,9 +71,11 @@ export default function Home() {
       </Typography>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress color="secondary" size={28} />
-        </Box>
+        <Stack spacing={1.5}>
+          <Skeleton variant="rounded" height={112} />
+          <Skeleton variant="rounded" height={112} />
+          <Skeleton variant="rounded" height={112} />
+        </Stack>
       ) : (
         <Stack spacing={1.5}>
           {items.map((item) => (
@@ -88,7 +94,7 @@ export default function Home() {
         </Stack>
       )}
 
-      {items.length === 0 && (
+      {!loading && items.length === 0 && (
         <Typography color="text.secondary">No active auctions right now — check back soon.</Typography>
       )}
 

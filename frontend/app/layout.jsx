@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import ClientProviders from './ClientProviders';
 import BackButton from '@/components/BackButton';
+import UserListingsHub from '@/components/UserListingsHub';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useReactNative } from '@/lib/contexts/ReactNativeWrapper';
 
@@ -78,6 +79,7 @@ export default function RootLayout({ children }) {
         <ClientProviders>
           <AuthenticatedNativeServices>
             <BackButton />
+            <UserListingsHub />
             {children}
           </AuthenticatedNativeServices>
         </ClientProviders>

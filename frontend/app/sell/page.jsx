@@ -2119,14 +2119,14 @@
 import { Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Box, Typography, TextField, Button, InputAdornment, CircularProgress, Alert,
+  Box, Typography, TextField, Button, InputAdornment, Alert,
   MenuItem, Skeleton, Stack, Chip,
 } from '@mui/material';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
 import { uploadFile } from '@/lib/api/uploads';
 import { STORAGE_KEYS } from '@/Constants';
-import { getMediaUrl, formatCurrency } from '@/Functions';
+import { getMediaUrl, formatCurrency, isDraftListing } from '@/Functions';
 import DocumentUploadCard from '@/components/shared/DocumentUploadCard';
 import BottomNav from '@/components/BottomNav';
 
@@ -2488,7 +2488,7 @@ function SellPageInner() {
           const ownerId = apiClient.resolveId(entity.seller, 'id');
           const viewerId = apiClient.resolveId(user, 'id');
 
-          if (entity.actIsDraft && String(ownerId) === String(viewerId)) {
+          if (isDraftListing(entity.actIsDraft) && String(ownerId) === String(viewerId)) {
             if (!cancelled) { loadItemIntoForm(entity); setPhase('ready'); }
             return;
           }
@@ -2570,12 +2570,12 @@ function SellPageInner() {
   // FIXED: was GET /auction-items?filters[seller][id][$eq]=... — Strapi
   // rejects filtering by relations to plugin::users-permissions.user
   // through the plain REST API ("Invalid key seller"). This uses the
-  // authenticated /auction-items/mine endpoint and filters to drafts.
+  // authenticated /auction-items/me/listings endpoint and filters to drafts.
   useEffect(() => {
     if (isEditMode || !user) return;
     apiClient
-      .get('/auction-items/mine')
-      .then((res) => setDrafts((res?.items || []).filter((i) => i.actIsDraft)))
+      .get('/auction-items/me/listings')
+      .then((res) => setDrafts((res?.items || []).filter((item) => isDraftListing(item.actIsDraft))))
       .catch((err) => console.error('Failed to load drafts:', err.status, err.message));
   }, [isEditMode, user, item]);
 
@@ -2889,7 +2889,7 @@ function SellPageInner() {
           disabled={publishing}
           sx={{ height: 56, fontWeight: 700 }}
         >
-          {publishing ? <CircularProgress size={24} color="inherit" /> : isEditMode ? 'Save Changes' : 'Publish Listing'}
+          {publishing ? <Skeleton variant="text" width={132} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : isEditMode ? 'Save Changes' : 'Publish Listing'}
         </Button>
       </Box>
 
@@ -2902,7 +2902,7 @@ function SellPageInner() {
 
 export default function SellPage() {
   return (
-    <Suspense fallback={<Box sx={{ p: 4, textAlign: 'center' }}><CircularProgress color="secondary" /></Box>}>
+    <Suspense fallback={<Box sx={{ p: 4 }}><Skeleton variant="text" width={200} height={40} /><Skeleton variant="rounded" height={56} sx={{ mt: 3 }} /><Skeleton variant="rounded" height={96} sx={{ mt: 2 }} /></Box>}>
       <SellPageInner />
     </Suspense>
   );

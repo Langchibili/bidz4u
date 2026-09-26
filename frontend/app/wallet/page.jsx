@@ -14,18 +14,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Box, Typography, CircularProgress, Button, TextField, Alert,
+  Box, Typography, Skeleton, Button, TextField, Alert,
   Tabs, Tab, InputAdornment, Chip, Stack, Divider,
 } from '@mui/material';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
-import { formatCurrency } from '@/Functions';
+import { formatCurrency, getCurrencySymbol } from '@/Functions';
+import { useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import BottomNav from '@/components/BottomNav';
 
 export default function WalletPage() {
   const router = useRouter();
-  const { isAuthenticated, hydrated, countryConfig } = useAuth();
-  const currencySymbol = countryConfig?.savedCurrencySymbol || 'ZK';
+  const { isAuthenticated, hydrated, countryConfig, effectiveSettings } = useAuth();
 
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -41,6 +41,16 @@ export default function WalletPage() {
   const [method, setMethod] = useState('mobile_money');
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const savedCurrencyCode = countryConfig?.savedCurrencyCode;
+  const walletCurrencyCode = wallet?.wltCurrencyCode || effectiveSettings?._userCurrency || savedCurrencyCode;
+  const viewerCurrencyCode = effectiveSettings?._userCurrency || savedCurrencyCode;
+  const viewerCurrencySymbol = viewerCurrencyCode === savedCurrencyCode
+    ? countryConfig?.savedCurrencySymbol || viewerCurrencyCode || 'ZK'
+    : getCurrencySymbol(viewerCurrencyCode);
+  const { rate: walletRate, isReady: isWalletPriceReady } = useViewerCurrencyRate(
+    walletCurrencyCode,
+    viewerCurrencyCode
+  );
 
   useEffect(() => {
     if (hydrated && !isAuthenticated()) router.push('/login');
@@ -113,10 +123,16 @@ export default function WalletPage() {
     }
   };
 
-  if (!hydrated || loading) {
+  if (!hydrated || loading || !isWalletPriceReady) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
-        <CircularProgress color="secondary" />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
+        <Skeleton variant="text" width={140} height={48} />
+        <Skeleton variant="rounded" height={132} sx={{ mt: 2, mb: 3 }} />
+        <Stack spacing={1.5}>
+          <Skeleton variant="rounded" height={56} />
+          <Skeleton variant="rounded" height={56} />
+          <Skeleton variant="rounded" height={56} />
+        </Stack>
       </Box>
     );
   }
@@ -138,10 +154,10 @@ export default function WalletPage() {
       >
         <Typography variant="caption" color="text.secondary">Available Balance</Typography>
         <Typography variant="h3" sx={{ fontWeight: 800, color: 'secondary.main', mb: 1 }}>
-          {formatCurrency(wallet?.wltAvailableBalance, currencySymbol)}
+          {formatCurrency(Number(wallet?.wltAvailableBalance || 0) * walletRate, viewerCurrencySymbol)}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          Locked in escrow: {formatCurrency(wallet?.wltLockedEscrowBalance, currencySymbol)}
+          Locked in escrow: {formatCurrency(Number(wallet?.wltLockedEscrowBalance || 0) * walletRate, viewerCurrencySymbol)}
         </Typography>
       </Box>
 
@@ -170,12 +186,12 @@ export default function WalletPage() {
             label="Amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            InputProps={{ startAdornment: <InputAdornment position="start">{viewerCurrencySymbol}</InputAdornment> }}
           />
           <TextField fullWidth label="Mobile money number" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <TextField fullWidth label="Network / operator" value={operator} onChange={(e) => setOperator(e.target.value)} placeholder="e.g. MTN, Airtel" />
           <Button type="submit" variant="contained" color="secondary" size="large" disabled={submitting} sx={{ height: 56, fontWeight: 700 }}>
-            {submitting ? <CircularProgress size={24} color="inherit" /> : 'Deposit'}
+            {submitting ? <Skeleton variant="text" width={72} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Deposit'}
           </Button>
         </Box>
       )}
@@ -188,7 +204,7 @@ export default function WalletPage() {
             label="Amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            InputProps={{ startAdornment: <InputAdornment position="start">{viewerCurrencySymbol}</InputAdornment> }}
           />
           <Tabs value={method} onChange={(_, v) => setMethod(v)} textColor="secondary" indicatorColor="secondary">
             <Tab label="Mobile Money" value="mobile_money" />
@@ -207,7 +223,7 @@ export default function WalletPage() {
             </>
           )}
           <Button type="submit" variant="contained" color="secondary" size="large" disabled={submitting} sx={{ height: 56, fontWeight: 700 }}>
-            {submitting ? <CircularProgress size={24} color="inherit" /> : 'Request Withdrawal'}
+            {submitting ? <Skeleton variant="text" width={150} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Request Withdrawal'}
           </Button>
         </Box>
       )}
@@ -236,7 +252,11 @@ export default function WalletPage() {
             </Box>
             <Box sx={{ textAlign: 'right' }}>
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                {formatCurrency(tx.txAmount, currencySymbol)}
+                <ConvertedTransactionAmount
+                  transaction={tx}
+                  viewerCurrencyCode={viewerCurrencyCode}
+                  viewerCurrencySymbol={viewerCurrencySymbol}
+                />
               </Typography>
               <Chip
                 size="small"
@@ -255,4 +275,12 @@ export default function WalletPage() {
       <BottomNav />
     </Box>
   );
+}
+
+function ConvertedTransactionAmount({ transaction, viewerCurrencyCode, viewerCurrencySymbol }) {
+  const sourceCurrencyCode = transaction.txCurrencyCodeAtExecution || viewerCurrencyCode;
+  const { rate, isReady } = useViewerCurrencyRate(sourceCurrencyCode, viewerCurrencyCode);
+
+  if (!isReady) return <Skeleton variant="text" width={96} sx={{ ml: 'auto' }} />;
+  return formatCurrency(Number(transaction.txAmount || 0) * rate, viewerCurrencySymbol);
 }

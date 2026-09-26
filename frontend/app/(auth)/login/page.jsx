@@ -8,7 +8,7 @@ import {
   TextField,
   Button,
   InputAdornment,
-  CircularProgress,
+  Skeleton,
   Alert,
   MenuItem,
   Select,
@@ -131,9 +131,7 @@ export default function LoginPage() {
               Country
             </Typography>
             {countriesLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress />
-              </Box>
+              <Skeleton variant="rounded" height={56} />
             ) : (
               <FormControl fullWidth>
                 <Select
@@ -203,7 +201,7 @@ export default function LoginPage() {
               disabled={loading || phoneNumber.replace(/\D/g, '').length < (selectedCountry?.phoneNumberDigitLenth || 9)}
               sx={{ height: 56, fontSize: '1rem', fontWeight: 600, mb: 2 }}
             >
-              {loading ? <CircularProgress size={24} color="inherit" /> : 'Continue'}
+              {loading ? <Skeleton variant="text" width={96} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Continue'}
             </Button>
 
             <Button fullWidth variant="text" onClick={() => router.push('/signup')} sx={{ height: 48, textTransform: 'none' }}>

@@ -2,8 +2,8 @@ export default {
   routes: [
     {
       method: "GET",
-      path: "/auction-items/mine",
-      handler: "auction-item.myDrafts",
+      path: "/auction-items/me/listings",
+      handler: "auction-item.myListings",
       config: { auth: {} },
     },
     {

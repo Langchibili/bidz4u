@@ -10,14 +10,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Box, Paper, BottomNavigation, BottomNavigationAction } from '@mui/material';
 import GavelIcon from '@mui/icons-material/Gavel';
 import AddCircleIcon from '@mui/icons-material/AddCircleOutline';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLongOutlined';
 import PersonIcon from '@mui/icons-material/PersonOutline';
 
 const TABS = [
   { label: 'Auctions', value: '/', icon: <GavelIcon /> },
   { label: 'Sell', value: '/sell', icon: <AddCircleIcon /> },
-  { label: 'Wallet', value: '/wallet', icon: <AccountBalanceWalletIcon /> },
   { label: 'My Bids', value: '/my-bids', icon: <ReceiptLongIcon /> },
   { label: 'Profile', value: '/profile', icon: <PersonIcon /> },
 ];

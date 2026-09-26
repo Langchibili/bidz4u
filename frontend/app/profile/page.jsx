@@ -19,19 +19,31 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Typography, CircularProgress, Button, Chip, Stack, Divider } from '@mui/material';
+import { Box, Typography, Skeleton, Button, Chip, Stack, Divider } from '@mui/material';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
-import { formatCurrency, getMediaUrl } from '@/Functions';
+import { formatCurrency, getCurrencySymbol, getMediaUrl, isDraftListing } from '@/Functions';
+import { useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import BottomNav from '@/components/BottomNav';
 
 const EXCLUDED_EDIT_STATUSES = ['active', 'sold', 'payment_pending'];
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, hydrated, isAuthenticated, countryConfig, logout } = useAuth();
+  const { user, hydrated, isAuthenticated, countryConfig, effectiveSettings, logout } = useAuth();
   const [listings, setListings] = useState([]);
   const [listingsLoading, setListingsLoading] = useState(true);
+  const [wallet, setWallet] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const savedCurrencyCode = countryConfig?.savedCurrencyCode;
+  const profileCurrencyCode = effectiveSettings?._userCurrency || savedCurrencyCode;
+  const profileCurrencySymbol = profileCurrencyCode === savedCurrencyCode
+    ? countryConfig?.savedCurrencySymbol || profileCurrencyCode || ''
+    : getCurrencySymbol(profileCurrencyCode);
+  const { rate: walletRate, isReady: isWalletPriceReady } = useViewerCurrencyRate(
+    wallet?.wltCurrencyCode || profileCurrencyCode,
+    profileCurrencyCode
+  );
 
   useEffect(() => {
     if (hydrated && !isAuthenticated()) router.push('/login');
@@ -39,20 +51,39 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
-    const numericUserId = apiClient.resolveId(user, 'id');
+    let cancelled = false;
     apiClient
-      .get(
-        `/auction-items?filters[seller][id][$eq]=${numericUserId}&filters[actIsDraft][$eq]=false&sort=updatedAt:desc&populate[actImages][fields][0]=url`
-      )
-      .then((res) => setListings(res?.data || []))
+      .get('/auction-items/me/listings')
+      .then((res) => {
+        if (!cancelled) setListings((res?.items || []).filter((item) => !isDraftListing(item.actIsDraft)));
+      })
       .catch((err) => console.error('Failed to load my listings', err))
-      .finally(() => setListingsLoading(false));
+      .finally(() => {
+        if (!cancelled) setListingsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    apiClient
+      .get('/wallets/me')
+      .then((res) => {
+        if (!cancelled) setWallet(res?.wallet || null);
+      })
+      .catch((err) => console.error('Failed to load wallet balance', err))
+      .finally(() => {
+        if (!cancelled) setWalletLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [user]);
 
   if (!hydrated || !user) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
-        <CircularProgress color="secondary" />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
+        <Skeleton variant="text" width={180} height={48} />
+        <Skeleton variant="rounded" height={132} sx={{ mt: 2 }} />
       </Box>
     );
   }
@@ -82,9 +113,33 @@ export default function ProfilePage() {
         />
       </Box>
 
+      <Box
+        sx={{
+          p: 2.5,
+          mb: 3,
+          borderRadius: 2,
+          bgcolor: 'background.paper',
+          borderLeft: '4px solid',
+          borderColor: 'secondary.main',
+          boxShadow: '0px 8px 32px rgba(0,0,0,0.35)',
+        }}
+      >
+        <Typography variant="caption" color="text.secondary">Wallet balance</Typography>
+        {walletLoading || !isWalletPriceReady ? (
+          <Skeleton variant="text" width={190} height={42} />
+        ) : (
+          <Typography variant="h5" sx={{ fontWeight: 800, color: 'secondary.main' }}>
+            {formatCurrency(Number(wallet?.wltAvailableBalance || 0) * walletRate, profileCurrencySymbol)}
+          </Typography>
+        )}
+        <Button size="small" color="secondary" onClick={() => router.push('/wallet')} sx={{ px: 0, minWidth: 0 }}>
+          View more
+        </Button>
+      </Box>
+
       <Stack spacing={1.5}>
         <Row label="Country" value={countryConfig?.savedCountryName || '—'} />
-        <Row label="Currency" value={`${countryConfig?.savedCurrencyCode || '—'} (${countryConfig?.savedCurrencySymbol || ''})`} />
+        <Row label="Currency" value={`${profileCurrencyCode || '—'} (${profileCurrencySymbol})`} />
       </Stack>
 
       <Divider sx={{ my: 3 }} />
@@ -94,7 +149,10 @@ export default function ProfilePage() {
       </Typography>
 
       {listingsLoading ? (
-        <CircularProgress size={20} color="secondary" />
+        <Stack spacing={1.5}>
+          <Skeleton variant="rounded" height={76} />
+          <Skeleton variant="rounded" height={76} />
+        </Stack>
       ) : (
         <Stack spacing={1.5}>
           {listings.map((item) => {

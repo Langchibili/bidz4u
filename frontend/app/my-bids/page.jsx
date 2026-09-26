@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Typography, CircularProgress, Stack, Chip } from '@mui/material';
+import { Box, Typography, Skeleton, Stack, Chip } from '@mui/material';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
 import { formatCurrency } from '@/Functions';
@@ -51,8 +51,13 @@ export default function MyBidsPage() {
 
   if (!hydrated || loading) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
-        <CircularProgress color="secondary" />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
+        <Skeleton variant="text" width={160} height={48} />
+        <Stack spacing={1.5} sx={{ mt: 2 }}>
+          <Skeleton variant="rounded" height={76} />
+          <Skeleton variant="rounded" height={76} />
+          <Skeleton variant="rounded" height={76} />
+        </Stack>
       </Box>
     );
   }

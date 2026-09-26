@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
-  CircularProgress,
+  Skeleton,
   Dialog,
   DialogActions,
   DialogContent,
@@ -109,7 +109,7 @@ export default function Bidz4uPayModal({ open, onClose, amount, currency, relate
             </TextField>
           </>
         )}
-        {phase === 'submitting' && <CircularProgress size={24} sx={{ mt: 2 }} />}
+        {phase === 'submitting' && <Skeleton variant="rounded" width="100%" height={48} sx={{ mt: 2 }} />}
         {phase === 'polling' && <Alert severity="info">Approve the payment request on your phone.</Alert>}
         {phase === 'success' && <Alert severity="success">{message}</Alert>}
         {phase === 'error' && <Alert severity="error">{message}</Alert>}

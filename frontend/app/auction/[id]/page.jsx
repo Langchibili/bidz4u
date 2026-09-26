@@ -8,7 +8,7 @@ import {
   Typography,
   TextField,
   Button,
-  CircularProgress,
+  Skeleton,
   Alert,
   Chip,
   InputAdornment,
@@ -24,7 +24,7 @@ import { apiClient } from '@/lib/api/client';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useSocket, getDisplayedAuctionPrice, getDisplayedAuctionStatus, useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
-import { formatCurrency, getCurrencySymbol } from '@/Functions';
+import { formatCurrency, getCurrencySymbol, isDraftListing } from '@/Functions';
 import BottomNav from '@/components/BottomNav';
 import Bidz4uPayModal from '@/components/Bidz4uPayModal';
 import { CUSTOM_THEME_COLORS, STORAGE_KEYS } from '@/Constants';
@@ -273,8 +273,10 @@ const handleAcceptPrice = async () => {
 
   if (loading) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
-        <CircularProgress color="secondary" />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
+        <Skeleton variant="text" width="58%" height={48} />
+        <Skeleton variant="text" width="84%" height={24} sx={{ mb: 3 }} />
+        <Skeleton variant="rounded" height={236} />
       </Box>
     );
   }
@@ -291,7 +293,7 @@ const handleAcceptPrice = async () => {
   // linked to from a draft (the drafts browser on /sell routes there
   // directly, not through here), but a seller could still land here by
   // pasting the URL themselves. Redirect them back to finish it instead.
-  if (item.actIsDraft) {
+  if (isDraftListing(item.actIsDraft)) {
     return (
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
         <Alert severity="info" sx={{ borderRadius: 3, mb: 2 }}>
@@ -450,7 +452,7 @@ const handleAcceptPrice = async () => {
             disabled={placingBid}
             sx={{ height: 56, fontSize: '1rem', fontWeight: 700 }}
           >
-            {placingBid ? <CircularProgress size={24} color="inherit" /> : 'Place Bid'}
+            {placingBid ? <Skeleton variant="text" width={100} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Place Bid'}
           </Button>
         </Box>
       )}

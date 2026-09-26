@@ -385,21 +385,25 @@ export default factories.createCoreController('api::auction-item.auction-item', 
     }
   },
 
-  async myDrafts(ctx) {
+  async myListings(ctx) {
     try {
       const userId = ctx.state.user?.id;
       if (!userId) return ctx.unauthorized('Login required');
 
       const items = await strapi.db.query('api::auction-item.auction-item').findMany({
-        where: { seller: userId, actIsDraft: true },
+        where: { seller: userId },
         orderBy: { updatedAt: 'desc' },
-        populate: ['actImages'],
+        populate: { actImages: true },
+      });
+      const winnerPayments = await strapi.db.query('api::auction-item.auction-item').findMany({
+        where: { currentWinningBuyer: userId, actAuctionStatus: 'payment_pending' },
+        orderBy: { updatedAt: 'desc' },
       });
 
-      ctx.send({ success: true, items });
+      ctx.send({ success: true, items, winnerPayments });
     } catch (error) {
-      console.error('Error fetching seller drafts:', error);
-      ctx.internalServerError('Failed to load drafts');
+      console.error('Error fetching user listings:', error);
+      ctx.internalServerError('Failed to load user listings');
     }
   },
 

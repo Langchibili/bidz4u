@@ -8,7 +8,7 @@ import {
   TextField,
   Button,
   InputAdornment,
-  CircularProgress,
+  Skeleton,
   Alert,
   Stepper,
   Step,
@@ -217,9 +217,7 @@ export default function SignupPage() {
               Country
             </Typography>
             {countriesLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress />
-              </Box>
+              <Skeleton variant="rounded" height={56} />
             ) : (
               <FormControl fullWidth>
                 <Select
@@ -376,7 +374,7 @@ export default function SignupPage() {
             disabled={loading || (activeStep === 0 && !selectedCountry)}
             sx={{ height: 56, flex: activeStep > 0 ? 2 : 1 }}
           >
-            {loading ? <CircularProgress size={24} color="inherit" /> : activeStep === steps.length - 2 ? 'Create Account' : 'Continue'}
+            {loading ? <Skeleton variant="text" width={112} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : activeStep === steps.length - 2 ? 'Create Account' : 'Continue'}
           </Button>
         </Box>
       )}

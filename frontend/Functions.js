@@ -41,6 +41,10 @@ export function getCurrencySymbol(currencyCode) {
   }
 }
 
+export function isDraftListing(value) {
+  return value === true || value === 1 || String(value).toLowerCase() === 'true';
+}
+
 /** mm:ss or hh:mm:ss countdown string from milliseconds remaining */
 export function formatCountdown(msRemaining) {
   if (msRemaining <= 0) return '00:00';

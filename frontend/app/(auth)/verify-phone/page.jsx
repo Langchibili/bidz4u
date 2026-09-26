@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Box, Typography, TextField, Button, CircularProgress, Alert } from '@mui/material';
+import { Box, Typography, TextField, Button, Skeleton, Alert } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -159,7 +159,7 @@ function VerifyPhoneInner() {
         disabled={otp.join('').length !== 6 || loading}
         sx={{ height: 56, mb: 2 }}
       >
-        {loading ? <CircularProgress size={24} color="inherit" /> : 'Verify & Continue'}
+        {loading ? <Skeleton variant="text" width={144} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Verify & Continue'}
       </Button>
     </Box>
   );
@@ -167,7 +167,7 @@ function VerifyPhoneInner() {
 
 export default function VerifyPhonePage() {
   return (
-    <Suspense fallback={<Box sx={{ p: 4, textAlign: 'center' }}><CircularProgress /></Box>}>
+    <Suspense fallback={<Box sx={{ p: 4 }}><Skeleton variant="text" width={180} height={40} /><Skeleton variant="rounded" height={56} sx={{ mt: 3 }} /></Box>}>
       <VerifyPhoneInner />
     </Suspense>
   );
