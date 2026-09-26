@@ -28,6 +28,7 @@ export default function WalletPage() {
   const { isAuthenticated, hydrated, countryConfig, effectiveSettings } = useAuth();
 
   const [wallet, setWallet] = useState(null);
+  const [settingsBaseCurrency, setSettingsBaseCurrency] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState(0); // 0 = deposit, 1 = withdraw
@@ -42,13 +43,14 @@ export default function WalletPage() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const savedCurrencyCode = countryConfig?.savedCurrencyCode;
-  const walletCurrencyCode = wallet?.wltCurrencyCode || effectiveSettings?._userCurrency || savedCurrencyCode;
   const viewerCurrencyCode = effectiveSettings?._userCurrency || savedCurrencyCode;
   const viewerCurrencySymbol = viewerCurrencyCode === savedCurrencyCode
     ? countryConfig?.savedCurrencySymbol || viewerCurrencyCode || 'ZK'
     : getCurrencySymbol(viewerCurrencyCode);
   const { rate: walletRate, isReady: isWalletPriceReady } = useViewerCurrencyRate(
-    walletCurrencyCode,
+    wallet?.currency?.currCode === viewerCurrencyCode
+      ? viewerCurrencyCode
+      : settingsBaseCurrency || effectiveSettings?._settingsBaseCurrency || viewerCurrencyCode,
     viewerCurrencyCode
   );
 
@@ -63,6 +65,7 @@ export default function WalletPage() {
         apiClient.get('/transactions/me'),
       ]);
       setWallet(walletRes?.wallet || null);
+      setSettingsBaseCurrency(walletRes?.settingsBaseCurrency || null);
       setTransactions(txRes?.transactions || []);
     } catch (err) {
       console.error('Failed to load wallet', err);

@@ -8,12 +8,16 @@ async function initializeWallet(strapi: any, user: User) {
   const country = user.country
     ? await strapi.db.query('api::country.country').findOne({ where: { id: user.country }, populate: ['currency'] })
     : null;
+  const adminSettings = country?.currency ? null : await strapi.db.query('api::admn-setting.admn-setting').findOne({
+    populate: { prefferedSettingsCurrency: true },
+  });
+  const currency = country?.currency || adminSettings?.prefferedSettingsCurrency;
 
   await strapi.db.query('api::wallet.wallet').create({
     data: {
       wltAvailableBalance: 0,
       wltLockedEscrowBalance: 0,
-      wltCurrencyCode: country?.currency?.currCode || 'ZMW',
+      ...(currency?.id ? { currency: currency.id } : {}),
       walletOwner: user.id,
     },
   });

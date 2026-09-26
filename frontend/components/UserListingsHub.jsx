@@ -9,6 +9,7 @@ import {
   Chip,
   Divider,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -17,6 +18,8 @@ import {
   SwipeableDrawer,
   Typography,
 } from '@mui/material';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import CloseIcon from '@mui/icons-material/Close';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
 import { STORAGE_KEYS } from '@/Constants';
@@ -148,7 +151,7 @@ export default function UserListingsHub() {
         </Alert>
       ))}
 
-      {hasListings && (
+      {pathname === '/' && hasListings && (
         <Button
           onClick={() => setDrawerOpen(true)}
           onTouchStart={(event) => { touchStartY.current = event.touches[0]?.clientY ?? null; }}
@@ -163,20 +166,26 @@ export default function UserListingsHub() {
           sx={{
             position: 'fixed',
             zIndex: 49,
-            left: '50%',
+            left: 0,
             bottom: 56,
-            transform: 'translateX(-50%)',
             minWidth: 0,
+            width: '100%',
+            minHeight: 62,
             px: 2,
             py: 0.5,
-            borderRadius: '12px 12px 0 0',
+            borderRadius: '18px 18px 0 0',
             bgcolor: 'background.paper',
             color: 'text.primary',
             boxShadow: '0 -3px 16px rgba(0,0,0,0.28)',
             textTransform: 'none',
             fontSize: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0,
+            '&:hover': { bgcolor: 'background.paper' },
           }}
         >
+          <KeyboardArrowUpIcon sx={{ fontSize: 21, animation: 'listing-arrow 1.1s ease-in-out infinite', '@keyframes listing-arrow': { '0%, 100%': { transform: 'translateY(2px)', opacity: 0.45 }, '50%': { transform: 'translateY(-2px)', opacity: 1 } } }} />
           My listings · {listings.length}
         </Button>
       )}
@@ -186,14 +195,20 @@ export default function UserListingsHub() {
         open={drawerOpen}
         onOpen={() => setDrawerOpen(true)}
         onClose={() => setDrawerOpen(false)}
-        swipeAreaWidth={32}
-        disableSwipeToOpen={false}
+        swipeAreaWidth={0}
+        disableSwipeToOpen
         ModalProps={{ keepMounted: true }}
-        PaperProps={{ sx: { height: '100dvh', maxHeight: '100dvh', overflow: 'hidden', bgcolor: 'background.default' } }}
+        PaperProps={{ sx: { height: '100dvh', maxHeight: '100dvh', width: 'calc(100% - 12px)', mx: '6px', overflow: 'hidden', bgcolor: 'background.default', borderRadius: '24px 24px 0 0' } }}
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
           <Box sx={{ flex: 1, overflowY: 'auto', p: 2, pb: 1 }}>
-            <Box sx={{ width: 36, height: 4, borderRadius: 2, bgcolor: 'text.disabled', mx: 'auto', mb: 2 }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Box sx={{ width: 40 }} />
+              <Box sx={{ width: 36, height: 4, borderRadius: 2, bgcolor: 'text.disabled' }} />
+              <IconButton aria-label="Close listings drawer" onClick={() => setDrawerOpen(false)} sx={{ width: 40, height: 40 }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
             <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>My listings</Typography>
             {loading ? (
               <Stack spacing={1.5}>

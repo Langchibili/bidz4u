@@ -1001,6 +1001,7 @@ export interface ApiWalletWallet extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    currency: Schema.Attribute.Relation<'manyToOne', 'api::currency.currency'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -1017,7 +1018,6 @@ export interface ApiWalletWallet extends Struct.CollectionTypeSchema {
     >;
     wltAvailableBalance: Schema.Attribute.Decimal &
       Schema.Attribute.DefaultTo<0>;
-    wltCurrencyCode: Schema.Attribute.String;
     wltLockedEscrowBalance: Schema.Attribute.Decimal &
       Schema.Attribute.DefaultTo<0>;
   };

@@ -1348,3 +1348,85 @@
 {"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"bUCAC_XLvAVRweCkAAFr","timestamp":"2026-09-26T01:39:36.478Z"}
 {"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"ga-9stQGlCZhy5s5AAFz","timestamp":"2026-09-26T01:39:40.085Z","userId":"8"}
 {"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"LexLvzxOzpK0fpxIAAF1","timestamp":"2026-09-26T01:41:07.782Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"LexLvzxOzpK0fpxIAAF1","timestamp":"2026-09-26T01:42:45.408Z"}
+{"level":"info","message":"[main] client disconnected","reason":"client namespace disconnect","socketId":"ga-9stQGlCZhy5s5AAFz","timestamp":"2026-09-26T01:44:14.430Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"4I0HCKjU-qIxAT3GAAF3","timestamp":"2026-09-26T01:44:14.574Z","userId":"8"}
+{"level":"info","message":"[main] Strapi system client connected","socketId":"0knTBdbZ-OpWZYKTAAF5","timestamp":"2026-09-26T01:44:59.835Z"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"4I0HCKjU-qIxAT3GAAF3","timestamp":"2026-09-26T01:46:49.214Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"5HWOzkw4pRn24-xCAAF7","timestamp":"2026-09-26T01:46:54.318Z","userId":"8"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"U0mgq4l_ZgjK8cqWAAF9","timestamp":"2026-09-26T01:48:48.299Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"U0mgq4l_ZgjK8cqWAAF9","timestamp":"2026-09-26T01:48:58.959Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"fb6Cjws7AfJW1c60AAF_","timestamp":"2026-09-26T01:49:02.202Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"5HWOzkw4pRn24-xCAAF7","timestamp":"2026-09-26T01:49:43.745Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"DiSlaKtomUwZkUMNAAGB","timestamp":"2026-09-26T01:49:57.164Z","userId":"8"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"fb6Cjws7AfJW1c60AAF_","timestamp":"2026-09-26T01:52:00.106Z"}
+{"level":"info","message":"[main] client disconnected","reason":"client namespace disconnect","socketId":"TTVFpEfhOj0ulK3XAAFT","timestamp":"2026-09-26T01:52:15.903Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"EUGYCev5mCkxW5r6AAGD","timestamp":"2026-09-26T01:52:33.127Z","userId":"7"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:10.030Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:10.411Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:11.414Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:11.704Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:11.811Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:11.813Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:11.919Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:12.088Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:12.763Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:12.862Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:12.863Z"}
+{"level":"info","message":"[strapi-relay] Strapi system client disconnected","reason":"transport close","timestamp":"2026-09-26T01:53:12.984Z"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"EUGYCev5mCkxW5r6AAGD","timestamp":"2026-09-26T01:54:34.637Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"w1-9EUooqo0y_9gyAAGG","timestamp":"2026-09-26T01:56:09.707Z","userId":"1"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"w1-9EUooqo0y_9gyAAGG","timestamp":"2026-09-26T01:56:09.743Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"gtsE_Ny_l8keUcU2AAGI","timestamp":"2026-09-26T01:56:09.774Z","userId":"1"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"I22gfZkkG2gx_v9FAAGL","timestamp":"2026-09-26T01:57:44.236Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"I22gfZkkG2gx_v9FAAGL","timestamp":"2026-09-26T01:59:01.068Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"I_a_z0PWQ4nsdawLAAGN","timestamp":"2026-09-26T02:09:13.104Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"I_a_z0PWQ4nsdawLAAGN","timestamp":"2026-09-26T02:11:22.760Z"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"DiSlaKtomUwZkUMNAAGB","timestamp":"2026-09-26T02:11:42.420Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"Ha2WRllAjjT7fYWfAAGP","timestamp":"2026-09-26T02:11:49.252Z","userId":"8"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"Sdj4z3V0PzGhhw2QAAGR","timestamp":"2026-09-26T02:13:08.229Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"Sdj4z3V0PzGhhw2QAAGR","timestamp":"2026-09-26T02:13:16.720Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"QDhzx0D4wKUlYrd8AAGT","timestamp":"2026-09-26T02:13:20.159Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"QDhzx0D4wKUlYrd8AAGT","timestamp":"2026-09-26T02:14:33.990Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"jzxgXU9uwrTP4zxZAAGV","timestamp":"2026-09-26T02:16:25.437Z","userId":"7"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"INpCpmCAYzhdmM2SAAGX","timestamp":"2026-09-26T02:16:55.168Z","userId":"6"}
+{"level":"info","message":"[main] client disconnected","reason":"client namespace disconnect","socketId":"INpCpmCAYzhdmM2SAAGX","timestamp":"2026-09-26T02:17:15.068Z"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"gtsE_Ny_l8keUcU2AAGI","timestamp":"2026-09-26T02:17:24.471Z"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"jzxgXU9uwrTP4zxZAAGV","timestamp":"2026-09-26T02:17:26.765Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"Fs4E234peyYb2YP3AAGZ","timestamp":"2026-09-26T02:17:28.913Z","userId":"1"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"bIfvlrgqomO9jEEuAAGb","timestamp":"2026-09-26T02:18:15.560Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"client namespace disconnect","socketId":"bIfvlrgqomO9jEEuAAGb","timestamp":"2026-09-26T02:18:15.619Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"LMzGLyb4OzoXn_HXAAGd","timestamp":"2026-09-26T02:18:15.681Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"client namespace disconnect","socketId":"LMzGLyb4OzoXn_HXAAGd","timestamp":"2026-09-26T02:18:25.210Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"G2uV7b0o2YXz6cCaAAGf","timestamp":"2026-09-26T02:18:59.859Z","userId":"8"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"G2uV7b0o2YXz6cCaAAGf","timestamp":"2026-09-26T02:18:59.918Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"PiFA48tTBz5qlpE2AAGh","timestamp":"2026-09-26T02:19:00.021Z","userId":"8"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"o7CidEdkMMtjo_ShAAGj","timestamp":"2026-09-26T02:30:27.688Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"o7CidEdkMMtjo_ShAAGj","timestamp":"2026-09-26T02:33:20.011Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"KWhuVsXJzga7BgotAAGl","timestamp":"2026-09-26T02:33:23.715Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"Ha2WRllAjjT7fYWfAAGP","timestamp":"2026-09-26T02:35:48.258Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"GuFsQbDo9HMOI4PHAAGo","timestamp":"2026-09-26T02:35:51.031Z","userId":"8"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"GuFsQbDo9HMOI4PHAAGo","timestamp":"2026-09-26T02:35:51.993Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"3C856A_ECJw8EONpAAGq","timestamp":"2026-09-26T02:35:55.813Z","userId":"8"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"Fs4E234peyYb2YP3AAGZ","timestamp":"2026-09-26T02:36:26.123Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"byYkG2a3h0wxKELvAAGs","timestamp":"2026-09-26T02:36:28.831Z","userId":"1"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"PiFA48tTBz5qlpE2AAGh","timestamp":"2026-09-26T02:36:31.146Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"f3TA5x8TlmhtaaV0AAGu","timestamp":"2026-09-26T02:36:32.838Z","userId":"8"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"3C856A_ECJw8EONpAAGq","timestamp":"2026-09-26T02:37:23.660Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"J3FCgmCu7CKcLejjAAGw","timestamp":"2026-09-26T02:37:42.688Z","userId":"8"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"KWhuVsXJzga7BgotAAGl","timestamp":"2026-09-26T02:40:28.073Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"byuXEx2bL0W2Q_dnAAGz","timestamp":"2026-09-26T02:42:03.717Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"byuXEx2bL0W2Q_dnAAGz","timestamp":"2026-09-26T02:42:12.156Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"ILRHW0GVJK_AQYyHAAG1","timestamp":"2026-09-26T02:42:15.173Z","userId":"7"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"J3FCgmCu7CKcLejjAAGw","timestamp":"2026-09-26T02:42:19.241Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"DgvVi_aHbA_NoRqfAAG3","timestamp":"2026-09-26T02:42:21.590Z","userId":"8"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"DgvVi_aHbA_NoRqfAAG3","timestamp":"2026-09-26T02:42:27.449Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"pQYcEa-ndyTpZLC4AAG5","timestamp":"2026-09-26T02:42:29.306Z","userId":"8"}
+{"level":"info","message":"[device] client disconnected","reason":"transport close","socketId":"pCS4ev5mXRQHqzCdAAFx","timestamp":"2026-09-26T02:43:01.240Z"}
+{"auctionItemId":null,"level":"info","message":"[device] client connected","socketId":"9jhZ2BCwO4S6usIjAAG7","timestamp":"2026-09-26T02:43:14.250Z","userId":null}
+{"level":"info","message":"[device] registered device fa53eb9694d76256 for user 2","timestamp":"2026-09-26T02:43:14.279Z"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"ILRHW0GVJK_AQYyHAAG1","timestamp":"2026-09-26T02:43:39.143Z"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"f3TA5x8TlmhtaaV0AAGu","timestamp":"2026-09-26T02:44:43.854Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"Bmyf1pDwRW2RiNftAAG9","timestamp":"2026-09-26T02:44:45.049Z","userId":"8"}
+{"level":"info","message":"[main] client disconnected","reason":"transport close","socketId":"Bmyf1pDwRW2RiNftAAG9","timestamp":"2026-09-26T02:44:53.692Z"}
+{"auctionItemId":null,"level":"info","message":"[main] client connected","socketId":"g-8IslQFtjduqDnsAAG_","timestamp":"2026-09-26T02:44:55.071Z","userId":"8"}

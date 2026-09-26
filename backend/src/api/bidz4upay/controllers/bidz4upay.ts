@@ -58,7 +58,7 @@ async function getUserWithCountry(userId: number) {
   return strapi.db.query('plugin::users-permissions.user').findOne({
     where: { id: userId },
     select: ['id', 'email', 'username', 'usrFullName'],
-    populate: { country: { populate: { currency: true } }, userWallet: true },
+    populate: { country: { populate: { currency: true } }, userWallet: { populate: { currency: true } } },
   });
 }
 

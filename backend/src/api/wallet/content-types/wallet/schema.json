@@ -6,7 +6,7 @@
   "attributes": {
     "wltAvailableBalance": { "type": "decimal", "default": 0.00 },
     "wltLockedEscrowBalance": { "type": "decimal", "default": 0.00 },
-    "wltCurrencyCode": { "type": "string" },
+    "currency": { "type": "relation", "relation": "manyToOne", "target": "api::currency.currency" },
     "walletOwner": { "type": "relation", "relation": "oneToOne", "target": "plugin::users-permissions.user", "inversedBy": "userWallet" }
   }
 }

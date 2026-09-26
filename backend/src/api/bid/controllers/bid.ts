@@ -78,7 +78,7 @@
 //             : await convertAmount(Number(settings.minimumAmountBeforeBid), settingsCurrency, auctionCurrency);
 //           }
 
-//         const walletCurrency = fullUser.userWallet?.wltCurrencyCode || userCurrency;
+//         const walletCurrency = fullUser.userWallet?.currency?.currCode || userCurrency;
 //         const walletBalance = Number(fullUser.userWallet?.wltAvailableBalance || 0);
 //         walletBalanceNative = walletCurrency === auctionCurrency
 //           ? walletBalance
@@ -209,7 +209,7 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
 
       const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
         where: { id: user.id },
-        populate: { country: { populate: ['currency'] }, userWallet: true },
+        populate: { country: { populate: ['currency'] }, userWallet: { populate: ['currency'] } },
       });
 
       const userCurrency = fullUser.country?.currency?.currCode;
@@ -280,7 +280,7 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
             : await convertAmount(Number(settings.minimumAmountBeforeBid), settingsCurrency, auctionCurrency);
           }
 
-        const walletCurrency = fullUser.userWallet?.wltCurrencyCode || userCurrency;
+        const walletCurrency = fullUser.userWallet?.currency?.currCode || userCurrency;
         const walletBalance = Number(fullUser.userWallet?.wltAvailableBalance || 0);
         walletBalanceNative = walletCurrency === auctionCurrency
           ? walletBalance

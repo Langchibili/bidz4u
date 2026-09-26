@@ -27,6 +27,28 @@ export default {
       }
     }
 
+    try {
+      const adminSettings = await strapi.db.query('api::admn-setting.admn-setting').findOne({
+        populate: { prefferedSettingsCurrency: true },
+      });
+      const wallets = await strapi.db.query('api::wallet.wallet').findMany({
+        where: { currency: null },
+        populate: { walletOwner: { populate: { country: { populate: { currency: true } } } }, currency: true },
+      });
+      for (const wallet of wallets) {
+        if (wallet.currency) continue;
+        const currency = wallet.walletOwner?.country?.currency || adminSettings?.prefferedSettingsCurrency;
+        if (currency?.id) {
+          await strapi.db.query('api::wallet.wallet').update({
+            where: { id: wallet.id },
+            data: { currency: currency.id },
+          });
+        }
+      }
+    } catch (error) {
+      strapi.log.error('Failed to backfill wallet currency relations', error);
+    }
+
     strapi.db.lifecycles.subscribe({
       models: ['plugin::users-permissions.user'],
       async afterCreate(event: any) {
