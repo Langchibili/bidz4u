@@ -16,14 +16,18 @@ export default {
       where: { type: 'authenticated' },
     });
     if (authenticatedRole) {
-      const action = 'api::auction-item.auction-item.myListings';
-      const permission = await strapi.db.query('plugin::users-permissions.permission').findOne({
-        where: { action, role: authenticatedRole.id },
-      });
-      if (!permission) {
-        await strapi.db.query('plugin::users-permissions.permission').create({
-          data: { action, role: authenticatedRole.id },
+      for (const action of [
+        'api::auction-item.auction-item.myListings',
+        'api::auction-item.auction-item.removeMine',
+      ]) {
+        const permission = await strapi.db.query('plugin::users-permissions.permission').findOne({
+          where: { action, role: authenticatedRole.id },
         });
+        if (!permission) {
+          await strapi.db.query('plugin::users-permissions.permission').create({
+            data: { action, role: authenticatedRole.id },
+          });
+        }
       }
     }
 

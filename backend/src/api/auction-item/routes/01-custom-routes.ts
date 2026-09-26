@@ -19,6 +19,12 @@ export default {
       config: { auth: {} },
     },
     {
+      method: "DELETE",
+      path: "/auction-items/:id/mine",
+      handler: "auction-item.removeMine",
+      config: { auth: {} },
+    },
+    {
       method: "GET",
       path: "/auction-items/:id/winner",
       handler: "auction-item.winner",

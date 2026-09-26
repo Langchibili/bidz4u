@@ -8,6 +8,11 @@ import {
   Button,
   Chip,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControl,
   IconButton,
   InputLabel,
@@ -20,6 +25,7 @@ import {
 } from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
 import { STORAGE_KEYS } from '@/Constants';
@@ -60,6 +66,9 @@ export default function UserListingsHub() {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const touchStartY = useRef(null);
 
   useEffect(() => {
@@ -112,6 +121,22 @@ export default function UserListingsHub() {
       if (id) router.push(`/auction/${id}`);
     }
     setDrawerOpen(false);
+  };
+
+  const removeListing = async () => {
+    if (!deleteTarget) return;
+    const listingId = apiClient.resolveId(deleteTarget);
+    try {
+      setDeleting(true);
+      setDeleteError('');
+      await apiClient.delete(`/auction-items/${encodeURIComponent(listingId)}/mine`);
+      setListings((current) => current.filter((item) => apiClient.resolveId(item) !== listingId));
+      setDeleteTarget(null);
+    } catch (error) {
+      setDeleteError(error.message || 'Failed to remove this listing');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const sellerPaymentPending = listings.filter((item) => !isDraftListing(item.actIsDraft) && item.actAuctionStatus === 'payment_pending');
@@ -173,16 +198,19 @@ export default function UserListingsHub() {
             minHeight: 62,
             px: 2,
             py: 0.5,
-            borderRadius: '18px 18px 0 0',
-            bgcolor: 'background.paper',
-            color: 'text.primary',
-            boxShadow: '0 -3px 16px rgba(0,0,0,0.28)',
+            borderRadius: '30px 30px 0 0',
+            backgroundColor: 'rgba(248, 216, 158, 0.88)',
+            backgroundImage: 'repeating-radial-gradient(ellipse at 50% 118%, transparent 0 20px, rgba(255, 255, 255, 0.22) 21px 22px, transparent 23px 40px), linear-gradient(160deg, rgba(255, 241, 207, 0.94), rgba(241, 190, 92, 0.8))',
+            backdropFilter: 'blur(12px) saturate(115%)',
+            color: '#4b3918',
+            border: '1px solid rgba(255, 249, 230, 0.72)',
+            boxShadow: '0 -4px 18px rgba(35, 23, 5, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.72)',
             textTransform: 'none',
             fontSize: 12,
             display: 'flex',
             flexDirection: 'column',
             gap: 0,
-            '&:hover': { bgcolor: 'background.paper' },
+            '&:hover': { backgroundColor: 'rgba(248, 216, 158, 0.94)' },
           }}
         >
           <KeyboardArrowUpIcon sx={{ fontSize: 21, animation: 'listing-arrow 1.1s ease-in-out infinite', '@keyframes listing-arrow': { '0%, 100%': { transform: 'translateY(2px)', opacity: 0.45 }, '50%': { transform: 'translateY(-2px)', opacity: 1 } } }} />
@@ -222,47 +250,66 @@ export default function UserListingsHub() {
                   const thumbnail = item.actImages?.[0]?.formats?.thumbnail?.url || item.actImages?.[0]?.url;
                   const isDraft = isDraftListing(item.actIsDraft);
                   const status = listingStatus(item);
+                  const canRemove = isDraft || item.actAuctionStatus === 'scheduled';
                   return (
                     <Box
                       key={apiClient.resolveId(item)}
-                      component="button"
-                      onClick={() => openListing(item)}
                       sx={{
-                        width: '100%',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1.5,
-                        p: 1.5,
-                        border: 0,
-                        borderRadius: 1.5,
-                        textAlign: 'left',
-                        color: 'text.primary',
-                        bgcolor: 'background.paper',
-                        cursor: 'pointer',
                       }}
                     >
-                      <Box sx={{
-                        width: 56,
-                        height: 56,
-                        flexShrink: 0,
-                        borderRadius: 1,
-                        bgcolor: 'action.hover',
-                        backgroundImage: thumbnail ? `url(${getMediaUrl(thumbnail)})` : undefined,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                      }} />
-                      <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700 }}>{item.actTitle || 'Untitled listing'}</Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap>
-                          {formatCurrency(item.actCurrentHighestPriceNative || item.actStartingPriceNative, item.actNativeCurrencyCode)}
-                        </Typography>
+                      <Box
+                        component="button"
+                        onClick={() => openListing(item)}
+                        sx={{
+                          minWidth: 0,
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          p: 1.5,
+                          border: 0,
+                          borderRadius: 1.5,
+                          textAlign: 'left',
+                          color: 'text.primary',
+                          bgcolor: 'background.paper',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Box sx={{
+                          width: 56,
+                          height: 56,
+                          flexShrink: 0,
+                          borderRadius: 1,
+                          bgcolor: 'action.hover',
+                          backgroundImage: thumbnail ? `url(${getMediaUrl(thumbnail)})` : undefined,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                        }} />
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700 }}>{item.actTitle || 'Untitled listing'}</Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {formatCurrency(item.actCurrentHighestPriceNative || item.actStartingPriceNative, item.actNativeCurrencyCode)}
+                          </Typography>
+                        </Box>
+                        <Chip
+                          size="small"
+                          label={isDraft ? 'Draft' : status.replaceAll('_', ' ')}
+                          color={status === 'payment_pending' ? 'warning' : status === 'active' ? 'success' : 'default'}
+                          sx={{ flexShrink: 0, textTransform: 'capitalize' }}
+                        />
                       </Box>
-                      <Chip
-                        size="small"
-                        label={isDraft ? 'Draft' : status.replaceAll('_', ' ')}
-                        color={status === 'payment_pending' ? 'warning' : status === 'active' ? 'success' : 'default'}
-                        sx={{ flexShrink: 0, textTransform: 'capitalize' }}
-                      />
+                      {canRemove && (
+                        <IconButton
+                          aria-label={`Delete ${item.actTitle || 'listing'}`}
+                          onClick={() => { setDeleteError(''); setDeleteTarget(item); }}
+                          sx={{ flexShrink: 0, color: 'error.light', bgcolor: 'rgba(239, 68, 68, 0.1)' }}
+                        >
+                          <DeleteOutlineIcon />
+                        </IconButton>
+                      )}
                     </Box>
                   );
                 })}
@@ -291,6 +338,27 @@ export default function UserListingsHub() {
           </FormControl>
         </Box>
       </SwipeableDrawer>
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Remove this listing?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            “{deleteTarget?.actTitle || 'Untitled listing'}” will be removed from your account.
+          </DialogContentText>
+          {deleteError && <Typography color="error" sx={{ mt: 2 }}>{deleteError}</Typography>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
+          <Button onClick={removeListing} disabled={deleting} color="error" variant="contained">
+            {deleting ? <Skeleton variant="text" width={64} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Remove'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

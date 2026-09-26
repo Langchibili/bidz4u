@@ -407,6 +407,41 @@ export default factories.createCoreController('api::auction-item.auction-item', 
     }
   },
 
+  async removeMine(ctx) {
+    try {
+      const userId = ctx.state.user?.id;
+      const { id } = ctx.params;
+      if (!userId) return ctx.unauthorized('Login required');
+
+      let item = await strapi.db.query('api::auction-item.auction-item').findOne({
+        where: { id },
+        populate: { seller: true },
+      });
+      if (!item) {
+        item = await strapi.db.query('api::auction-item.auction-item').findOne({
+          where: { documentId: id },
+          populate: { seller: true },
+        });
+      }
+      if (!item) return ctx.notFound('Auction item not found');
+      if (String(item.seller?.id) !== String(userId)) return ctx.forbidden('You do not own this listing');
+
+      if (item.actIsDraft !== true && item.actAuctionStatus !== 'scheduled') {
+        return ctx.badRequest('Only draft or scheduled listings can be removed');
+      }
+
+      await strapi.db.query('api::auction-item.auction-item').update({
+        where: { id: item.id },
+        data: { seller: null },
+      });
+
+      ctx.send({ success: true, detached: true });
+    } catch (error) {
+      console.error('Error detaching seller from auction item:', error);
+      ctx.internalServerError('Failed to remove listing from your account');
+    }
+  },
+
   async winner(ctx) {
     try {
       const userId = ctx.state.user?.id;
