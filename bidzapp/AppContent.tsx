@@ -54,7 +54,11 @@ export default function AppContent() {
     DeviceSocketService.on(SOCKET_EVENTS.PAYMENT.FAILED, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.PAYMENT_FAILED, payload: data }));
 
     DeviceSocketService.on(SOCKET_EVENTS.NOTIFICATION.NEW, async (data: any) => {
-      await NotificationService.show(data);
+      try {
+        await NotificationService.show(data);
+      } catch (error) {
+        logger.warn('Could not display local notification', error);
+      }
       sendToWebView({ type: WEBVIEW_EVENTS.NOTIFICATION_NEW, payload: data });
     });
     DeviceSocketService.on(SOCKET_EVENTS.DEVICE.SESSION_REPLACED, (data: any) => sendToWebView({ type: WEBVIEW_EVENTS.SESSION_REPLACED, payload: data }));

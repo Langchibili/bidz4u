@@ -39,7 +39,7 @@ export default function Home() {
     // the only thing keeping drafts off the public feed.
     apiClient
       .get(
-        '/auction-items?filters[actAuctionStatus][$eq]=active&filters[actIsDraft][$eq]=false&populate[actImages][fields][0]=url&populate[actImages][fields][1]=formats&populate[itemOriginCountry][fields][0]=countryName&populate[itemOriginCountry][fields][1]=countryCode&sort=createdAt:desc'
+        '/auction-items?filters[actAuctionStatus][$eq]=active&filters[actIsDraft][$eq]=false&populate[actImages][fields][0]=url&populate[actImages][fields][1]=formats&populate[itemOriginCountry][fields][0]=id&populate[itemOriginCountry][fields][1]=countryName&populate[itemOriginCountry][fields][2]=countryCode&populate[itemOriginCountry][populate][currency][fields][0]=currCode&sort=createdAt:desc'
       )
       .then((res) => {
         if (!cancelled) setItems(res?.data || []);

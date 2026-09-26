@@ -41,24 +41,27 @@ import { motion, AnimatePresence } from 'framer-motion';
 import PlaceIcon from '@mui/icons-material/PlaceOutlined';
 import { apiClient } from '@/lib/api/client';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { formatCurrency, getMediaUrl } from '@/Functions';
+import { formatCurrency, getCurrencySymbol, getMediaUrl } from '@/Functions';
 import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
 import { useSocket, getDisplayedAuctionPrice, useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import { CUSTOM_THEME_COLORS } from '@/Constants';
 
 export default function AuctionCard({ item, onClick }) {
-  const { user, countryConfig } = useAuth();
-  const viewerCurrencyCode = countryConfig?.savedCurrencyCode;
-  const viewerCurrencySymbol = countryConfig?.savedCurrencySymbol || viewerCurrencyCode || '';
+  const { user, countryConfig, effectiveSettings } = useAuth();
+  const savedCurrencyCode = countryConfig?.savedCurrencyCode;
+  const viewerCurrencyCode = effectiveSettings?._userCurrency || savedCurrencyCode;
+  const viewerCurrencySymbol = viewerCurrencyCode === savedCurrencyCode
+    ? countryConfig?.savedCurrencySymbol || viewerCurrencyCode || ''
+    : getCurrencySymbol(viewerCurrencyCode);
   const viewerCountryName = countryConfig?.savedCountryName;
+  const viewerCountryId = countryConfig?.countryId;
+  const itemCountryId = item.itemOriginCountry?.id;
   const itemCountryName = item.itemOriginCountry?.countryName;
-  //console.log('itemCountryName',item)
-  // True only when we actually know both countries AND they differ — this
-  // is the single gate for both currency conversion and the location text
-  // below. Missing data on either side (e.g. itemOriginCountry wasn't
-  // populated) means "don't know", which defaults to NOT showing/fetching
-  // extra cross-border context rather than guessing.
-  const isDifferentCountry = !!itemCountryName && !!viewerCountryName && itemCountryName !== viewerCountryName;
+  const normalizedViewerCountryName = String(viewerCountryName || '').trim().toLowerCase();
+  const normalizedItemCountryName = String(itemCountryName || '').trim().toLowerCase();
+  const isDifferentCountry = viewerCountryId && itemCountryId
+    ? String(viewerCountryId) !== String(itemCountryId)
+    : Boolean(normalizedItemCountryName && normalizedViewerCountryName && normalizedItemCountryName !== normalizedViewerCountryName);
 
   // Numeric id — the sockets service rooms and the lightweight-status
   // polling fallback both key off this, not documentId. See the uidType
@@ -152,10 +155,11 @@ export default function AuctionCard({ item, onClick }) {
   // useViewerCurrencyRate treat it as a no-op (rate 1, immediately ready)
   // without needing any change to that hook itself.
   const { rate, isReady: isPriceReady } = useViewerCurrencyRate(
-    isDifferentCountry ? nativeCurrencyCode : viewerCurrencyCode,
+    isDifferentCountry ? (nativeCurrencyCode || item.itemOriginCountry?.currency?.currCode) : viewerCurrencyCode,
     viewerCurrencyCode
   );
   const displayedPrice = Number(nativePrice) * rate;
+  const displayedCurrencySymbol = isDifferentCountry ? viewerCurrencySymbol : (item.actNativeCurrencySymbol || viewerCurrencySymbol);
   const displayedStatus = live.auctionStatus || item.actAuctionStatus;
 
   const locationLabel = item.actTown && isDifferentCountry
@@ -191,7 +195,7 @@ export default function AuctionCard({ item, onClick }) {
         }}
       />
 
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box sx={{ flex: 1, minWidth: 0, containerType: 'inline-size' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
           <Typography
             variant="subtitle2"
@@ -224,8 +228,20 @@ export default function AuctionCard({ item, onClick }) {
 
         <AnimatePresence mode="wait">
           <motion.div key={isPriceReady ? displayedPrice : 'loading'} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: 'secondary.main', mt: 0.5 }}>
-              {isPriceReady ? formatCurrency(displayedPrice, viewerCurrencySymbol) : 'Loading price...'}
+            <Typography
+              variant="h6"
+              sx={{
+                minWidth: 0,
+                maxWidth: '100%',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                fontWeight: 800,
+                color: 'secondary.main',
+                mt: 0.5,
+                fontSize: 'clamp(0.75rem, 12cqw, 1.25rem)',
+              }}
+            >
+              {isPriceReady ? formatCurrency(displayedPrice, displayedCurrencySymbol) : 'Loading price...'}
             </Typography>
           </motion.div>
         </AnimatePresence>

@@ -28,15 +28,30 @@ export function formatCurrency(amount, symbol = 'ZK') {
   return `${symbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+export function getCurrencySymbol(currencyCode) {
+  if (!currencyCode) return '';
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currencyCode,
+      currencyDisplay: 'narrowSymbol',
+    }).formatToParts(0).find((part) => part.type === 'currency')?.value || currencyCode;
+  } catch {
+    return currencyCode;
+  }
+}
+
 /** mm:ss or hh:mm:ss countdown string from milliseconds remaining */
 export function formatCountdown(msRemaining) {
   if (msRemaining <= 0) return '00:00';
   const totalSeconds = Math.floor(msRemaining / 1000);
-  const hrs = Math.floor(totalSeconds / 3600);
-  const mins = Math.floor((totalSeconds % 3600) / 60);
-  const secs = totalSeconds % 60;
-  const pad = (n) => String(n).padStart(2, '0');
-  return hrs > 0 ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (value) => String(value).padStart(2, '0');
+  if (days > 0) return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
 }
 
 /** Strapi serves uploaded media from the API root, not under /api — this

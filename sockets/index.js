@@ -137,6 +137,14 @@ function bindNamespace(nsp, label) {
 
         socket.join(`user:${registeredUserId}`);
         socket.join(`device:${deviceId}`);
+        const map = registration.userType === 'seller' ? connections.sellers : connections.bidders;
+        addConnection(map, registeredUserId, socket.id);
+        connections.sockets.set(socket.id, {
+          nsp: label,
+          type: registration.userType || 'bidder',
+          id: registeredUserId,
+          auctionItemId: null,
+        });
         devices.set(deviceId, {
           userId: registeredUserId,
           socketId: socket.id,

@@ -2425,6 +2425,7 @@ function SellPageInner() {
   // ── Initial resolution: edit mode vs draft mode ──
   useEffect(() => {
     if (!hydrated) return undefined;
+    if (!userId) return undefined;
     if (initLockRef.current) return undefined; // already ran for this mount — see comment on the ref
     initLockRef.current = true;
 
@@ -2553,9 +2554,12 @@ function SellPageInner() {
     }
 
     init();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      initLockRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, userId]);
 
   // Redirect unauthenticated visitors, matching every other protected page.
   useEffect(() => {
@@ -2565,9 +2569,8 @@ function SellPageInner() {
   // ── Other drafts, for the browser below the form (draft mode only) ──
   // FIXED: was GET /auction-items?filters[seller][id][$eq]=... — Strapi
   // rejects filtering by relations to plugin::users-permissions.user
-  // through the plain REST API ("Invalid key seller"). Now uses the custom
-  // /auction-items/mine endpoint (see the file-level comment + README for
-  // the required backend addition), filtered to drafts client-side.
+  // through the plain REST API ("Invalid key seller"). This uses the
+  // authenticated /auction-items/mine endpoint and filters to drafts.
   useEffect(() => {
     if (isEditMode || !user) return;
     apiClient

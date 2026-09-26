@@ -10,6 +10,7 @@ import { useState, useEffect, useContext, createContext, useCallback } from 'rea
 import { authAPI } from '@/lib/api/auth';
 import { apiClient } from '@/lib/api/client';
 import { GLOBAL_DEFAULTS, STORAGE_KEYS } from '@/Constants';
+import { useReactNative } from './ReactNativeWrapper';
 
 const AuthContext = createContext();
 
@@ -22,6 +23,7 @@ export const useAuth = () => {
 };
 
 export function AuthProvider({ children }) {
+  const { isNative, disconnectNativeServices } = useReactNative();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -197,6 +199,11 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    if (isNative) {
+      disconnectNativeServices().catch((error) => {
+        console.warn('Failed to stop native services during logout', error);
+      });
+    }
     authAPI.logout();
     setUser(null);
   };

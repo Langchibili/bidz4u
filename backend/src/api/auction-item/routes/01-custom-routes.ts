@@ -2,6 +2,12 @@ export default {
   routes: [
     {
       method: "GET",
+      path: "/auction-items/mine",
+      handler: "auction-item.myDrafts",
+      config: { auth: {} },
+    },
+    {
+      method: "GET",
       path: "/auction-items/:id/lightweight-status",
       handler: "auction-item.lightweightStatus",
       config: { auth: false },

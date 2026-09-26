@@ -15,7 +15,7 @@ export function useReactNative() {
 export default function ReactNativeWrapper({ children }) {
   const [isNative, setIsNative] = useState(false);
   const [servicesInitialized, setServicesInitialized] = useState(false);
-  const [permissions, setPermissions] = useState({ location: null, notification: null });
+  const [permissions, setPermissions] = useState({ notification: null });
   const pendingRef = useRef(new Map());
   const handlersRef = useRef(new Map());
   const requestCounterRef = useRef(0);
@@ -91,6 +91,17 @@ export default function ReactNativeWrapper({ children }) {
     return result;
   }, [sendToNative]);
 
+  const disconnectNativeServices = useCallback(async () => {
+    try {
+      const result = await sendToNative('DISCONNECT_SOCKET');
+      setServicesInitialized(false);
+      return result;
+    } catch (error) {
+      setServicesInitialized(false);
+      throw error;
+    }
+  }, [sendToNative]);
+
   const requestPermission = useCallback(async (permissionType) => {
     const result = await sendToNative('REQUEST_PERMISSION', { permissionType });
     setPermissions((previous) => ({ ...previous, [permissionType]: result?.status }));
@@ -111,6 +122,7 @@ export default function ReactNativeWrapper({ children }) {
       sendToNative,
       on,
       initializeNativeServices,
+      disconnectNativeServices,
       requestPermission,
       checkPermission,
       showNotification: (notification) => sendToNative('SHOW_NOTIFICATION', notification),

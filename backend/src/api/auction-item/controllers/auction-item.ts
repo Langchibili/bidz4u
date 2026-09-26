@@ -385,6 +385,24 @@ export default factories.createCoreController('api::auction-item.auction-item', 
     }
   },
 
+  async myDrafts(ctx) {
+    try {
+      const userId = ctx.state.user?.id;
+      if (!userId) return ctx.unauthorized('Login required');
+
+      const items = await strapi.db.query('api::auction-item.auction-item').findMany({
+        where: { seller: userId, actIsDraft: true },
+        orderBy: { updatedAt: 'desc' },
+        populate: ['actImages'],
+      });
+
+      ctx.send({ success: true, items });
+    } catch (error) {
+      console.error('Error fetching seller drafts:', error);
+      ctx.internalServerError('Failed to load drafts');
+    }
+  },
+
   async winner(ctx) {
     try {
       const userId = ctx.state.user?.id;

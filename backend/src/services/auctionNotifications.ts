@@ -46,6 +46,7 @@ export async function notifyBidPlaced(strapi: any, input: AuctionNotificationInp
   const bidderIds = await getBidderIds(strapi, input.auctionItemId);
   const recipients = new Set(bidderIds);
   addUserId(recipients, input.sellerId);
+  addUserId(recipients, input.bidderId);
 
   for (const userId of recipients) {
     if (userId === Number(input.sellerId)) {

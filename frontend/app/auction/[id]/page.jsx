@@ -24,7 +24,7 @@ import { apiClient } from '@/lib/api/client';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useSocket, getDisplayedAuctionPrice, getDisplayedAuctionStatus, useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
-import { formatCurrency } from '@/Functions';
+import { formatCurrency, getCurrencySymbol } from '@/Functions';
 import BottomNav from '@/components/BottomNav';
 import Bidz4uPayModal from '@/components/Bidz4uPayModal';
 import { CUSTOM_THEME_COLORS, STORAGE_KEYS } from '@/Constants';
@@ -59,8 +59,11 @@ export default function AuctionDetailPage() {
   // viewer's own currency now (via useViewerCurrencyRate) — see the
   // PRICE CURRENCY note further down for how that's kept honest when the
   // listing's native currency differs.
-  const viewerCurrencyCode = countryConfig?.savedCurrencyCode;
-  const viewerCurrencyLabel = countryConfig?.savedCurrencySymbol || countryConfig?.savedCurrencyCode || '';
+  const savedCurrencyCode = countryConfig?.savedCurrencyCode;
+  const viewerCurrencyCode = effectiveSettings?._userCurrency || savedCurrencyCode;
+  const viewerCurrencyLabel = viewerCurrencyCode === savedCurrencyCode
+    ? countryConfig?.savedCurrencySymbol || viewerCurrencyCode || ''
+    : getCurrencySymbol(viewerCurrencyCode);
   const pollIntervalMs = effectiveSettings?._pollIntervalMs;
 
   // IMPORTANT: sockets and the lightweight-status polling fallback both key
@@ -88,7 +91,7 @@ export default function AuctionDetailPage() {
       setLoading(true);
       // Default core `findOne` — resolves the route param as documentId.
       const res = await apiClient.get(
-        `/auction-items/${routeDocumentId}?populate[actImages][populate]=*&populate[itemOriginCountry][fields][0]=countryName&populate[itemOriginCountry][fields][1]=countryCode`
+        `/auction-items/${routeDocumentId}?populate[actImages][populate]=*&populate[itemOriginCountry][fields][0]=id&populate[itemOriginCountry][fields][1]=countryName&populate[itemOriginCountry][fields][2]=countryCode&populate[itemOriginCountry][populate][currency][fields][0]=currCode`
       );
       console.log('Fetched auction item', res);
       setItem(res?.data || res);
@@ -177,14 +180,24 @@ export default function AuctionDetailPage() {
   // useViewerCurrencyRate() then converts that native price into the
   // VIEWER's own currency — shown below with the viewer's own currency
   // symbol, same as the wallet page.
-  const { displayedPrice: nativePrice, displayedCurrencyCode: nativeCurrencyCode } = getDisplayedAuctionPrice(item, live);
-  const displayedStatus = getDisplayedAuctionStatus(item, live);
-  const { rate, isReady: isPriceReady } = useViewerCurrencyRate(nativeCurrencyCode, viewerCurrencyCode);
-  const displayedPrice = Number(nativePrice) * rate;
-  const wasCurrencyConverted = !!nativeCurrencyCode && !!viewerCurrencyCode && nativeCurrencyCode !== viewerCurrencyCode;
+  const itemCountryId = item?.itemOriginCountry?.id;
   const itemCountryName = item?.itemOriginCountry?.countryName;
   const viewerCountryName = countryConfig?.savedCountryName;
-  const isDifferentCountry = !!itemCountryName && !!viewerCountryName && itemCountryName !== viewerCountryName;
+  const viewerCountryId = countryConfig?.countryId;
+  const normalizedViewerCountryName = String(viewerCountryName || '').trim().toLowerCase();
+  const normalizedItemCountryName = String(itemCountryName || '').trim().toLowerCase();
+  const isDifferentCountry = viewerCountryId && itemCountryId
+    ? String(viewerCountryId) !== String(itemCountryId)
+    : Boolean(normalizedItemCountryName && normalizedViewerCountryName && normalizedItemCountryName !== normalizedViewerCountryName);
+  const { displayedPrice: nativePrice, displayedCurrencyCode: nativeCurrencyCode } = getDisplayedAuctionPrice(item, live);
+  const displayedStatus = getDisplayedAuctionStatus(item, live);
+  const { rate, isReady: isPriceReady } = useViewerCurrencyRate(
+    isDifferentCountry ? (nativeCurrencyCode || item?.itemOriginCountry?.currency?.currCode) : viewerCurrencyCode,
+    viewerCurrencyCode
+  );
+  const displayedPrice = Number(nativePrice) * rate;
+  const displayedCurrencySymbol = isDifferentCountry ? viewerCurrencyLabel : (item?.actNativeCurrencySymbol || viewerCurrencyLabel);
+  const wasCurrencyConverted = isDifferentCountry && !!nativeCurrencyCode && !!viewerCurrencyCode && nativeCurrencyCode !== viewerCurrencyCode;
   const locationLabel = item?.actTown && isDifferentCountry
     ? `${item.actTown}, ${itemCountryName}`
     : item?.actTown || (isDifferentCountry ? itemCountryName : '');
@@ -306,7 +319,7 @@ const handleAcceptPrice = async () => {
   const isFinalMinute = timer.isInFinalMinute;
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3, pb: 10 }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3, pb: 10, containerType: 'inline-size' }}>
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
         {item.actTitle}
       </Typography>
@@ -353,8 +366,19 @@ const handleAcceptPrice = async () => {
 
         <AnimatePresence mode="wait">
           <motion.div key={isPriceReady ? displayedPrice : 'loading'} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
-            <Typography variant="h3" sx={{ fontWeight: 800, color: 'secondary.main' }}>
-              {isPriceReady ? formatCurrency(displayedPrice, viewerCurrencyLabel) : '...'}
+            <Typography
+              variant="h3"
+              sx={{
+                minWidth: 0,
+                maxWidth: '100%',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                fontWeight: 800,
+                color: 'secondary.main',
+                fontSize: 'clamp(1.25rem, 9cqw, 3rem)',
+              }}
+            >
+              {isPriceReady ? formatCurrency(displayedPrice, displayedCurrencySymbol) : '...'}
             </Typography>
           </motion.div>
         </AnimatePresence>
@@ -395,11 +419,6 @@ const handleAcceptPrice = async () => {
           {timer.isExpired ? 'Auction ended' : `${timer.display} left`}
         </Typography>
 
-        {live.isUsingFallback && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            Live connection lost — updating via polling
-          </Typography>
-        )}
       </Box>
 
       {isActive && !timer.isExpired && !isOwner && (

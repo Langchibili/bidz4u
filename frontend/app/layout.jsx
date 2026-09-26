@@ -3,12 +3,13 @@
 import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import ClientProviders from './ClientProviders';
+import BackButton from '@/components/BackButton';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useReactNative } from '@/lib/contexts/ReactNativeWrapper';
 
 function AuthenticatedNativeServices({ children }) {
   const { user, hydrated, isAuthenticated } = useAuth();
-  const { isNative, servicesInitialized, initializeNativeServices } = useReactNative();
+  const { isNative, servicesInitialized, initializeNativeServices, disconnectNativeServices } = useReactNative();
   const initializedUserId = useRef(null);
   const userType = ['seller', 'seller-admin'].includes(String(user?.userType || user?.role?.name || '').toLowerCase())
     ? 'seller'
@@ -16,6 +17,13 @@ function AuthenticatedNativeServices({ children }) {
 
   useEffect(() => {
     const userId = user?.id;
+    if (hydrated && (!userId || !isAuthenticated())) {
+      if (initializedUserId.current !== null) {
+        disconnectNativeServices().catch(() => {});
+        initializedUserId.current = null;
+      }
+      return;
+    }
     if (
       !hydrated ||
       !isNative ||
@@ -31,10 +39,11 @@ function AuthenticatedNativeServices({ children }) {
       initializedUserId.current = null;
       console.error('Failed to initialize native services', error);
     });
-  }, [hydrated, initializeNativeServices, isAuthenticated, isNative, servicesInitialized, user?.id, userType]);
+  }, [disconnectNativeServices, hydrated, initializeNativeServices, isAuthenticated, isNative, servicesInitialized, user?.id, userType]);
 
   useEffect(() => {
     const userId = user?.id;
+    console.log('user',user)
     if (!hydrated || isNative || !isAuthenticated() || !userId) return undefined;
 
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:3015/main-sockets';
@@ -67,7 +76,10 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body style={{ margin: 0 }}>
         <ClientProviders>
-          <AuthenticatedNativeServices>{children}</AuthenticatedNativeServices>
+          <AuthenticatedNativeServices>
+            <BackButton />
+            {children}
+          </AuthenticatedNativeServices>
         </ClientProviders>
       </body>
     </html>
