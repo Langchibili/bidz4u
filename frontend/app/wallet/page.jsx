@@ -22,6 +22,7 @@ import { apiClient } from '@/lib/api/client';
 import { formatCurrency, getCurrencySymbol } from '@/Functions';
 import { useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import BottomNav from '@/components/BottomNav';
+import Bidz4uPayModal from '@/components/Bidz4uPayModal';
 
 export default function WalletPage() {
   const router = useRouter();
@@ -32,6 +33,7 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState(0); // 0 = deposit, 1 = withdraw
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   const [amount, setAmount] = useState('');
   const [phone, setPhone] = useState('');
@@ -81,49 +83,21 @@ export default function WalletPage() {
   const handleDeposit = async (e) => {
     e.preventDefault();
     setFeedback(null);
-    if (!amount || Number(amount) <= 0) {
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       setFeedback({ type: 'error', message: 'Enter a valid amount' });
       return;
     }
-    try {
-      setSubmitting(true);
-      await apiClient.post('/bidz4upay/initiate', {
-        purpose: 'walletdeposit',
-        amount,
-        phone,
-        operator,
-      });
-      setFeedback({ type: 'success', message: 'Deposit initiated — approve the prompt on your phone.' });
-      setAmount('');
-    } catch (err) {
-      setFeedback({ type: 'error', message: err.message || 'Failed to initiate deposit' });
-    } finally {
-      setSubmitting(false);
-    }
+    setPaymentOpen(true);
   };
 
   const handleWithdraw = async (e) => {
     e.preventDefault();
     setFeedback(null);
-    if (!amount || Number(amount) <= 0) {
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       setFeedback({ type: 'error', message: 'Enter a valid amount' });
       return;
     }
-    try {
-      setSubmitting(true);
-      await apiClient.post('/bidz4upay/request-withdrawal', {
-        amount,
-        method,
-        ...(method === 'mobile_money' ? { phone, operator } : { accountNumber, bankId, accountName }),
-      });
-      setFeedback({ type: 'success', message: 'Withdrawal requested — processing.' });
-      setAmount('');
-      loadWallet();
-    } catch (err) {
-      setFeedback({ type: 'error', message: err.message || 'Failed to request withdrawal' });
-    } finally {
-      setSubmitting(false);
-    }
+    setPaymentOpen(true);
   };
 
   if (!hydrated || loading || !isWalletPriceReady) {
@@ -146,7 +120,7 @@ export default function WalletPage() {
         Wallet
       </Typography>
 
-      <Box
+      {(Number(wallet?.wltAvailableBalance || 0) > 0 || Number(wallet?.wltLockedEscrowBalance || 0) > 0) && <Box
         sx={{
           borderRadius: 3,
           p: 3,
@@ -156,13 +130,14 @@ export default function WalletPage() {
         }}
       >
         <Typography variant="caption" color="text.secondary">Available Balance</Typography>
-        <Typography variant="h3" sx={{ fontWeight: 800, color: 'secondary.main', mb: 1 }}>
+        <Typography variant="h3" sx={{ fontWeight: 800, color: 'success.main', mb: 1 }}>
           {formatCurrency(Number(wallet?.wltAvailableBalance || 0) * walletRate, viewerCurrencySymbol)}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Locked in escrow: {formatCurrency(Number(wallet?.wltLockedEscrowBalance || 0) * walletRate, viewerCurrencySymbol)}
+        <Typography variant="caption" sx={{ display: 'block', color: '#81a784' }}>Locked Balance</Typography>
+        <Typography variant="h6" sx={{ color: '#81a784', opacity: 0.7, fontWeight: 700 }}>
+          {formatCurrency(Number(wallet?.wltLockedEscrowBalance || 0) * walletRate, viewerCurrencySymbol)}
         </Typography>
-      </Box>
+      </Box>}
 
       <Tabs
         value={tab}
@@ -191,10 +166,8 @@ export default function WalletPage() {
             onChange={(e) => setAmount(e.target.value)}
             InputProps={{ startAdornment: <InputAdornment position="start">{viewerCurrencySymbol}</InputAdornment> }}
           />
-          <TextField fullWidth label="Mobile money number" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <TextField fullWidth label="Network / operator" value={operator} onChange={(e) => setOperator(e.target.value)} placeholder="e.g. MTN, Airtel" />
           <Button type="submit" variant="contained" color="secondary" size="large" disabled={submitting} sx={{ height: 56, fontWeight: 700 }}>
-            {submitting ? <Skeleton variant="text" width={72} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Deposit'}
+            {submitting ? <Skeleton variant="text" width={160} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Continue to deposit'}
           </Button>
         </Box>
       )}
@@ -226,7 +199,7 @@ export default function WalletPage() {
             </>
           )}
           <Button type="submit" variant="contained" color="secondary" size="large" disabled={submitting} sx={{ height: 56, fontWeight: 700 }}>
-            {submitting ? <Skeleton variant="text" width={150} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Request Withdrawal'}
+            {submitting ? <Skeleton variant="text" width={150} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Continue to withdrawal'}
           </Button>
         </Box>
       )}
@@ -274,6 +247,25 @@ export default function WalletPage() {
           <Typography variant="body2" color="text.secondary">No transactions yet.</Typography>
         )}
       </Stack>
+
+      <Bidz4uPayModal
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        amount={amount}
+        currency={viewerCurrencySymbol}
+        purpose={tab === 0 ? 'walletdeposit' : 'withdraw'}
+        phoneCode={countryConfig?.savedPhoneCode}
+        withdrawalDetails={{
+          method,
+          ...(method === 'mobile_money' ? { phone, operator } : { accountNumber, bankId, accountName }),
+        }}
+        onSuccess={() => {
+          setPaymentOpen(false);
+          setAmount('');
+          setFeedback({ type: 'success', message: tab === 0 ? 'Deposit completed.' : 'Withdrawal completed.' });
+          loadWallet();
+        }}
+      />
 
       <BottomNav />
     </Box>

@@ -2127,6 +2127,7 @@ import { apiClient } from '@/lib/api/client';
 import { uploadFile } from '@/lib/api/uploads';
 import { STORAGE_KEYS } from '@/Constants';
 import { getMediaUrl, formatCurrency, isDraftListing } from '@/Functions';
+import { useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import DocumentUploadCard from '@/components/shared/DocumentUploadCard';
 import BottomNav from '@/components/BottomNav';
 
@@ -2237,6 +2238,9 @@ function SellPageInner() {
   // Minimum starting price for the currently selected country.
   const [minStartingPrice, setMinStartingPrice] = useState(null);
   const [minStartingPriceCurrency, setMinStartingPriceCurrency] = useState('');
+  const [commission, setCommission] = useState(null);
+  const [commissionType, setCommissionType] = useState('percentage');
+  const [commissionCurrency, setCommissionCurrency] = useState('');
 
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
@@ -2257,10 +2261,17 @@ function SellPageInner() {
   );
   const towns = useMemo(() => normalizeTowns(selectedCountry?.towns), [selectedCountry]);
   const currencyLabel = selectedCountry?.currency?.currSymbol || selectedCountry?.currency?.currCode || '';
+  const { rate: commissionRate, isReady: isCommissionRateReady } = useViewerCurrencyRate(
+    commissionCurrency,
+    selectedCountry?.currency?.currCode
+  );
 
   // 0, empty, or NaN all mean "no price set" — never send/treat 0 as a real price.
   const priceIsUnset = !startingPrice || Number(startingPrice) === 0 || Number.isNaN(Number(startingPrice));
   const priceBelowMinimum = !priceIsUnset && minStartingPrice != null && Number(startingPrice) < minStartingPrice;
+  const commissionAmount = commissionType === 'percentage'
+    ? Number(startingPrice || 0) * Number(commission || 0) / 100
+    : Number(commission || 0) * commissionRate;
 
   // Stable primitive to key effects off of — `user` is a new object
   // reference on every AuthContext render, which would otherwise cause the
@@ -2303,12 +2314,18 @@ function SellPageInner() {
         const settings = res?.settings || res;
         setMinStartingPrice(settings?.minimumAuctionStartingPrice ?? null);
         setMinStartingPriceCurrency(selectedCountry?.currency?.currCode || '');
+        setCommission(settings?.commission ?? 0);
+        setCommissionType(settings?.commissionType || 'percentage');
+        setCommissionCurrency(settings?._commissionCurrency || selectedCountry?.currency?.currCode || '');
       })
       .catch((err) => {
         console.error('Failed to load effective settings for minimum starting price', err);
         if (!cancelled) {
           setMinStartingPrice(null);
           setMinStartingPriceCurrency('');
+          setCommission(null);
+          setCommissionType('percentage');
+          setCommissionCurrency('');
         }
       });
     return () => { cancelled = true; };
@@ -2857,6 +2874,12 @@ function SellPageInner() {
                   : undefined
           }
         />
+        {commission !== null && isCommissionRateReady && Number(startingPrice) > 0 && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5 }}>
+            Site commission: {formatCurrency(commissionAmount, currencyLabel)}
+            {commissionType === 'percentage' ? ` (${Number(commission)}%)` : ''}. Your estimated proceeds: {formatCurrency(Math.max(0, Number(startingPrice) - commissionAmount), currencyLabel)}.
+          </Typography>
+        )}
 
         <TextField
           fullWidth

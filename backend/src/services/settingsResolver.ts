@@ -5,8 +5,8 @@
  * Money fields need to know WHICH currency they're denominated in, since a
  * country override is assumed to be in that country's own currency, while an
  * admn_settings fallback is in admn_settings.prefferedSettingsCurrency.
- * `minimumAmountBeforeBid` and `minimumAuctionStartingPrice` are the two
- * money fields among the resolved settings — everything else is a boolean,
+ * `minimumAmountBeforeBid`, `minimumAuctionStartingPrice`, and `commission`
+ * are money fields among the resolved settings — everything else is a boolean,
  * enum, percentage, or duration in minutes.
  */
 
@@ -16,6 +16,8 @@ const FIELD_MAP: Record<string, string> = {
   minimumAmountBeforeBidType: 'fallbackMinimumAmountBeforeBidType',
   minimumAmountBeforeBid: 'fallbackMinimumAmountBeforeBid',
   minimumAuctionStartingPrice: 'fallbackMinimumAuctionStartingPrice',
+  commissionType: 'fallbackCommissionType',
+  commission: 'fallbackCommission',
   timeToAllowBidWinnerToPayInMins: 'fallbackTimeToAllowBidWinnerToPayInMins',
   maximumTimeBeforeBiddingClosesInMins: 'fallbackMaximumTimeBeforeBiddingClosesInMins',
   minimumBidsBeforeAuctionClose: 'fallbackMinimumBidsBeforeAuctionClose',
@@ -65,6 +67,9 @@ export async function resolveSettingsForCountry(strapi: any, countryId?: number 
   // Same rule for minimumAuctionStartingPrice.
   const minimumStartingPriceCameFromCountry = country?.minimumAuctionStartingPrice !== null && country?.minimumAuctionStartingPrice !== undefined;
   resolved._minimumAuctionStartingPriceCurrency = minimumStartingPriceCameFromCountry ? userCurrency : settingsBaseCurrency;
+
+  const commissionCameFromCountry = country?.commission !== null && country?.commission !== undefined;
+  resolved._commissionCurrency = commissionCameFromCountry ? userCurrency : settingsBaseCurrency;
 
   return resolved;
 }

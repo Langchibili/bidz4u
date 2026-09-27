@@ -9,6 +9,7 @@
     "bidAmountLocalSnapshot": { "type": "decimal", "required": true },
     "bidLocalCurrencyCode": { "type": "string", "required": true },
     "bidSecuredDepositHeld": { "type": "decimal", "required": true },
+    "bidSecuredDepositCurrencyCode": { "type": "string" },
     "bidWasConverted": { "type": "boolean", "default": false },
     "bidStatus": {
       "type": "enumeration",

@@ -30,6 +30,13 @@
     "actDeliveryConfirmationCode": { "type": "string" },
     "actBuyerConfirmedDelivery": { "type": "boolean", "default": false },
     "actSellerConfirmedDelivery": { "type": "boolean", "default": false },
+    "actEscrowAmount": { "type": "decimal", "default": 0 },
+    "actEscrowCurrencyCode": { "type": "string" },
+    "actEscrowReleased": { "type": "boolean", "default": false },
+    "actCommissionAmount": { "type": "decimal", "default": 0 },
+    "actCommissionCurrencyCode": { "type": "string" },
+    "actBuyerDeliveryEvidence": { "type": "media", "multiple": false },
+    "actBuyerDeliveryIsDigital": { "type": "boolean", "default": false },
     "actImages": { "type": "media", "multiple": true },
     "seller": {
       "type": "relation",

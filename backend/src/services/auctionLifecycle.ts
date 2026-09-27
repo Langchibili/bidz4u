@@ -2,6 +2,8 @@
 
 import socketService from './socketService';
 import { notifyAuctionClosed } from './auctionNotifications';
+import { closeAuctionAndRefundNonWinners } from './bidDepositLifecycle';
+import { autoSettleFromWinningBidDeposit } from './lockedBidAutoSettlement';
 
 export async function checkAndCloseExpiredAuctions(strapi: any) {
   const now = new Date();
@@ -12,10 +14,16 @@ export async function checkAndCloseExpiredAuctions(strapi: any) {
 
   for (const item of expired) {
     const hasWinner = !!item.currentWinningBuyer;
-    await strapi.db.query('api::auction-item.auction-item').update({
-      where: { id: item.id },
-      data: { actAuctionStatus: hasWinner ? 'payment_pending' : 'delisted_no_bids' },
-    });
+    try {
+      await closeAuctionAndRefundNonWinners(strapi, item, hasWinner ? 'payment_pending' : 'delisted_no_bids');
+    } catch (error) {
+      strapi.log.error(`[auctionLifecycle] Failed to close auction ${item.id} and refund non-winners`, error);
+      continue;
+    }
+    const automaticallySettled = hasWinner
+      ? await autoSettleFromWinningBidDeposit(strapi, item.id)
+      : false;
+
     socketService.emitAuctionClosed(item.id, item.currentWinningBuyer?.id || null);
     await notifyAuctionClosed(strapi, {
       auctionItemId: item.id,
@@ -23,6 +31,7 @@ export async function checkAndCloseExpiredAuctions(strapi: any) {
       winnerId: item.currentWinningBuyer?.id || null,
       amount: item.actCurrentHighestPriceNative,
       currency: item.actNativeCurrencyCode,
+      paymentCompleted: automaticallySettled,
     });
   }
 }

@@ -56,6 +56,11 @@
       "type": "decimal",
       "default": 10
     },
+    "commissionType": {
+      "type": "enumeration",
+      "enum": ["percentage", "flatrate"]
+    },
+    "commission": { "type": "decimal" },
     "timeToAllowBidWinnerToPayInMins": {
       "type": "integer"
     },

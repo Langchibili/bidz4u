@@ -140,6 +140,10 @@ export default function UserListingsHub() {
   };
 
   const sellerPaymentPending = listings.filter((item) => !isDraftListing(item.actIsDraft) && item.actAuctionStatus === 'payment_pending');
+  const sellerAwaitingDelivery = listings.filter((item) => !isDraftListing(item.actIsDraft)
+    && item.actAuctionStatus === 'sold'
+    && Number(item.actEscrowAmount || 0) > 0
+    && item.actEscrowReleased !== true);
   const hasListings = listings.length > 0;
 
   return (
@@ -160,11 +164,32 @@ export default function UserListingsHub() {
         </Alert>
       ))}
 
+      {sellerAwaitingDelivery.map((item) => (
+        <Alert
+          key={`seller-delivery-${apiClient.resolveId(item)}`}
+          severity="warning"
+          action={(
+            <Stack direction="row" spacing={0.5}>
+              <Button color="inherit" size="small" onClick={() => router.push(`/auction/${itemUrl(item)}`)}>View listing</Button>
+              <Button color="inherit" size="small" component="a" href="mailto:support@bidz4u.com?subject=Delivery%20support">Contact support</Button>
+            </Stack>
+          )}
+          sx={{
+            borderRadius: 0,
+            bgcolor: '#ffedd5',
+            color: '#7c2d12',
+            '& .MuiAlert-icon': { color: '#c2410c' },
+          }}
+        >
+          Item sold, awaiting delivery. The item must be delivered to the buyer before you can withdraw your money.
+        </Alert>
+      ))}
+
       {winnerPayments.map((item) => (
         <Alert
           key={`winner-${apiClient.resolveId(item)}`}
           severity="warning"
-          action={<Button color="inherit" size="small" onClick={() => router.push(`/auction/${itemUrl(item)}`)}>Pay now</Button>}
+          action={<Button color="inherit" size="small" onClick={() => router.push(`/auction/${itemUrl(item)}/checkout`)}>Pay now</Button>}
           sx={{
             borderRadius: 0,
             bgcolor: '#fff2c2',

@@ -1,6 +1,12 @@
 export default {
   routes: [
     {
+      method: "GET",
+      path: "/bidz4upay/winner-quote/:id",
+      handler: "bidz4upay.winnerQuote",
+      config: { auth: {} },
+    },
+    {
       method: "POST",
       path: "/bidz4upay/initiate",
       handler: "bidz4upay.initiate",

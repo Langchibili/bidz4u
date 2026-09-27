@@ -9,6 +9,7 @@ type AuctionNotificationInput = {
   bidderId?: number | null;
   amount?: number | null;
   currency?: string | null;
+  paymentCompleted?: boolean;
 };
 
 function addUserId(target: Set<number>, value: unknown) {
@@ -68,7 +69,15 @@ export async function notifyAuctionClosed(strapi: any, input: AuctionNotificatio
     if (userId === Number(input.sellerId)) {
       send(userId, 'auction_closed', input, 'Auction ended', 'Your auction has ended.');
     } else if (userId === Number(input.winnerId)) {
-      send(userId, 'auction_closed', input, 'You won the auction', 'You won this auction. Complete payment to continue.');
+      send(
+        userId,
+        'auction_closed',
+        input,
+        'You won the auction',
+        input.paymentCompleted
+          ? 'Your locked bid deposit covered the purchase. Your item is awaiting delivery.'
+          : 'You won this auction. Complete payment to continue.'
+      );
     } else {
       send(userId, 'auction_closed', input, 'Auction ended', 'The auction ended with another winning bidder.');
     }

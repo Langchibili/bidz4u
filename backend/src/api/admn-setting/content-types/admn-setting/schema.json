@@ -32,6 +32,12 @@
       "type": "decimal",
       "default": 10
     },
+    "fallbackCommissionType": {
+      "type": "enumeration",
+      "enum": ["percentage", "flatrate"],
+      "default": "percentage"
+    },
+    "fallbackCommission": { "type": "decimal", "default": 0 },
     "fallbackBidExtensionTriggerWindowMins": {
       "type": "integer",
       "default": 10

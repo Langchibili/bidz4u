@@ -1,6 +1,7 @@
 import { factories } from '@strapi/strapi';
 import { getPaymentGateway } from '../../../paymentGatewayAdapters';
 import { resolveSettingsForCountry } from '../../../services/settingsResolver';
+import { convertAmount } from '../../../services/currencyConversion';
 import socketService from '../../../services/socketService';
 
 // ─── Reference helpers ────────────────────────────────────────────────────────
@@ -60,6 +61,64 @@ async function getUserWithCountry(userId: number) {
     select: ['id', 'email', 'username', 'usrFullName'],
     populate: { country: { populate: { currency: true } }, userWallet: { populate: { currency: true } } },
   });
+}
+
+async function getWinnerPaymentQuote(auctionItemId: string, winnerId: number) {
+  const item = await strapi.db.query('api::auction-item.auction-item').findOne({
+    where: { id: auctionItemId },
+    populate: { currentWinningBuyer: true, seller: true },
+  });
+  if (!item || Number(item.currentWinningBuyer?.id) !== Number(winnerId)) return null;
+  if (item.actAuctionStatus !== 'payment_pending') return null;
+
+  const winner = await strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { id: winnerId },
+    populate: { country: { populate: ['currency'] }, userWallet: { populate: ['currency'] } },
+  });
+  const buyerCurrency = String(winner?.country?.currency?.currCode || '').toUpperCase();
+  if (!buyerCurrency) throw new Error('Your account has no payment currency set');
+
+  const wallet = winner?.userWallet;
+  const walletCurrency = String(wallet?.currency?.currCode || buyerCurrency).toUpperCase();
+  const winningBid = await strapi.db.query('api::bid.bid').findOne({
+    where: { auctionItem: item.id, bidder: winnerId, bidStatus: 'active_leading' },
+  });
+  const lockedHeld = Number(winningBid?.bidSecuredDepositHeld || 0);
+  const lockedCurrency = String(winningBid?.bidSecuredDepositCurrencyCode || walletCurrency).toUpperCase();
+  const price = Number(item.actCurrentHighestPriceNative || 0);
+  const itemCurrency = String(item.actNativeCurrencyCode || '').toUpperCase();
+  const lockedBalance = Number(wallet?.wltLockedEscrowBalance || 0);
+  if (lockedHeld > 0 && lockedBalance < lockedHeld) {
+    throw new Error('The winning bid deposit is not present in locked escrow balance');
+  }
+  const lockedInItemCurrency = lockedCurrency === itemCurrency
+    ? lockedHeld
+    : await convertAmount(lockedHeld, lockedCurrency, itemCurrency);
+  const walletAppliedInItemCurrency = Math.min(price, lockedInItemCurrency);
+  const walletDebit = walletAppliedInItemCurrency > 0
+    ? Math.min(lockedHeld, lockedCurrency === itemCurrency
+      ? walletAppliedInItemCurrency
+      : await convertAmount(walletAppliedInItemCurrency, itemCurrency, lockedCurrency))
+    : 0;
+  const walletRefund = Math.max(0, lockedHeld - walletDebit);
+  const remainingInItemCurrency = Math.max(0, price - walletAppliedInItemCurrency);
+  const amountDue = remainingInItemCurrency > 0
+    ? await convertAmount(remainingInItemCurrency, itemCurrency, buyerCurrency)
+    : 0;
+
+  return {
+    item,
+    wallet,
+    buyerCurrency,
+    walletCurrency,
+    walletDebit: Math.round(walletDebit * 100) / 100,
+    walletHeld: Math.round(lockedHeld * 100) / 100,
+    walletRefund: Math.round(walletRefund * 100) / 100,
+    amountDue,
+    totalPrice: price,
+    itemCurrency,
+    walletAppliedInItemCurrency,
+  };
 }
 
 // ─── Domain handlers ───────────────────────────────────────────────────────────
@@ -143,14 +202,14 @@ async function handleWinnerPaymentSuccess(
   try {
     const auctionItem = await strapi.db.query('api::auction-item.auction-item').findOne({
       where: { id: auctionItemId },
-      populate: { currentWinningBuyer: true },
+      populate: { currentWinningBuyer: true, seller: true },
     });
 
     if (!auctionItem) {
       strapi.log.error(`[Bidz4uPay:winnerpay] Auction item ${auctionItemId} not found`);
       return;
     }
-    if (auctionItem.actAuctionStatus === 'sold') {
+    if (auctionItem.actEscrowAmount && Number(auctionItem.actEscrowAmount) > 0) {
       strapi.log.warn(`[Bidz4uPay:winnerpay] Item ${auctionItemId} already sold — duplicate ignored`);
       return;
     }
@@ -161,32 +220,114 @@ async function handleWinnerPaymentSuccess(
       return;
     }
 
-    // Move out of payment_pending — awaiting delivery confirmation from both sides
-    await strapi.db.query('api::auction-item.auction-item').update({
-      where: { id: auctionItemId },
-      data: { actAuctionStatus: 'payment_pending' },
-    });
+    const sellerId = auctionItem.seller?.id;
+    const sellerWallet = sellerId
+      ? await strapi.db.query('api::wallet.wallet').findOne({ where: { walletOwner: sellerId }, populate: { currency: true } })
+      : null;
+    if (!sellerWallet) throw new Error(`Seller wallet not found for auction item ${auctionItemId}`);
 
-    const winnerWallet = await strapi.db.query('api::wallet.wallet').findOne({ where: { walletOwner: winnerId } });
+    const saleAmountNative = Number(auctionItem.actCurrentHighestPriceNative || 0);
+    const itemCurrency = String(auctionItem.actNativeCurrencyCode || bidz4upayRecord.payCurrencyCode).toUpperCase();
+    const sellerCurrency = String(sellerWallet.currency?.currCode || itemCurrency).toUpperCase();
+    const escrowAmount = sellerCurrency === itemCurrency
+      ? saleAmountNative
+      : await convertAmount(saleAmountNative, itemCurrency, sellerCurrency);
+    const lockedBalance = Number(sellerWallet.wltLockedEscrowBalance || 0);
 
-    await strapi.db.query('api::transaction.transaction').create({
-      data: {
-        txReference: `TXN-WINPAY-${Date.now()}`,
-        txGatewayReference: bidz4upayRecord.payGatewayReference,
-        txAmount: bidz4upayRecord.payAmount,
-        txCurrencyCodeAtExecution: bidz4upayRecord.payCurrencyCode,
-        txType: 'escrow_lock',
-        txStatus: 'completed',
-        txMeta: webhookData,
-        wallet: winnerWallet?.id,
-      },
+    await strapi.db.transaction(async () => {
+      await strapi.db.query('api::wallet.wallet').update({
+        where: { id: sellerWallet.id },
+        data: { wltLockedEscrowBalance: lockedBalance + escrowAmount },
+      });
+      await strapi.db.query('api::auction-item.auction-item').update({
+        where: { id: auctionItemId },
+        data: {
+          actAuctionStatus: 'sold',
+          actEscrowAmount: escrowAmount,
+          actEscrowCurrencyCode: sellerCurrency,
+          actEscrowReleased: false,
+          actBuyerConfirmedDelivery: false,
+          actSellerConfirmedDelivery: false,
+        },
+      });
+      await strapi.db.query('api::transaction.transaction').create({
+        data: {
+          txReference: `TXN-ESCROW-LOCK-${auctionItemId}-${Date.now()}`,
+          txGatewayReference: bidz4upayRecord.payGatewayReference,
+          txAmount: escrowAmount,
+          txCurrencyCodeAtExecution: sellerCurrency,
+          txType: 'escrow_lock',
+          txStatus: 'completed',
+          txMeta: { ...webhookData, auctionItemId, buyerId: winnerId, saleAmountNative, itemCurrency },
+          wallet: sellerWallet.id,
+        },
+      });
+      const walletContribution = Number(bidz4upayRecord.payMetadata?.winnerWalletDebit || 0);
+      const walletHeld = Number(bidz4upayRecord.payMetadata?.winnerWalletHeld || 0);
+      const winnerWalletId = bidz4upayRecord.payMetadata?.winnerWalletId;
+      if (walletHeld > 0 && winnerWalletId) {
+        const winnerWallet = await strapi.db.query('api::wallet.wallet').findOne({ where: { id: winnerWalletId } });
+        const winnerLockedBalance = Number(winnerWallet?.wltLockedEscrowBalance || 0);
+        if (!winnerWallet || winnerLockedBalance < walletHeld) {
+          throw new Error('Winning bid deposit changed before payment completed; winner payment needs reconciliation');
+        }
+        await strapi.db.query('api::wallet.wallet').update({
+          where: { id: winnerWalletId },
+          data: {
+            wltLockedEscrowBalance: winnerLockedBalance - walletHeld,
+            wltAvailableBalance: Number(winnerWallet.wltAvailableBalance || 0) + Number(bidz4upayRecord.payMetadata?.winnerWalletRefund || 0),
+          },
+        });
+        if (walletContribution > 0) {
+          await strapi.db.query('api::transaction.transaction').create({
+            data: {
+              txReference: `TXN-WINPAY-WALLET-${auctionItemId}-${Date.now()}`,
+              txAmount: walletContribution,
+              txCurrencyCodeAtExecution: bidz4upayRecord.payMetadata.winnerWalletCurrency,
+              txType: 'escrow_release',
+              txStatus: 'completed',
+              txMeta: { auctionItemId, saleAmountNative, itemCurrency, appliedToSale: true },
+              wallet: winnerWalletId,
+            },
+          });
+        }
+        const walletRefund = Number(bidz4upayRecord.payMetadata?.winnerWalletRefund || 0);
+        if (walletRefund > 0) {
+          await strapi.db.query('api::transaction.transaction').create({
+            data: {
+              txReference: `TXN-WINPAY-REFUND-${auctionItemId}-${Date.now()}`,
+              txAmount: walletRefund,
+              txCurrencyCodeAtExecution: bidz4upayRecord.payMetadata.winnerWalletCurrency,
+              txType: 'escrow_release',
+              txStatus: 'completed',
+              txMeta: { auctionItemId, reason: 'winning deposit exceeded purchase price' },
+              wallet: winnerWalletId,
+            },
+          });
+        }
+        await strapi.db.query('api::bid.bid').update({
+          where: { auctionItem: auctionItemId, bidder: winnerId, bidStatus: 'active_leading' },
+          data: { bidSecuredDepositHeld: 0, bidStatus: 'won_complete' },
+        });
+      }
     });
 
     socketService.emitPaymentSuccess(winnerId, Number(bidz4upayRecord.payAmount), bidz4upayRecord.payReference);
+    socketService.emitNotification(sellerId, {
+      title: 'Item sold, delivery needed',
+      body: 'Payment is secured in escrow. Deliver the item so the buyer can confirm receipt and release your funds.',
+      data: { kind: 'auction_paid', auctionItemId: Number(auctionItemId), amount: escrowAmount, currency: sellerCurrency },
+    });
+    socketService.emitNotification(winnerId, {
+      title: 'Payment secured',
+      body: 'Your item is awaiting delivery. Please wait for it to arrive, then confirm receipt to release the seller’s funds.',
+      data: { kind: 'auction_paid', auctionItemId: Number(auctionItemId), amount: saleAmountNative, currency: itemCurrency },
+    });
 
     strapi.log.info(`[Bidz4uPay:winnerpay] Winner ${winnerId} settled payment for item ${auctionItemId}`);
   } catch (err) {
     strapi.log.error('[Bidz4uPay:winnerpay]', err);
+    throw err;
   }
 }
 
@@ -262,10 +403,35 @@ async function handleWithdrawalFailed(
 
 export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ strapi }) => ({
 
+  async winnerQuote(ctx: any) {
+    try {
+      const userId = ctx.state.user?.id;
+      if (!userId) return ctx.unauthorized('Authentication required');
+      const quote = await getWinnerPaymentQuote(String(ctx.params.id), userId);
+      if (!quote) return ctx.forbidden('This auction is not awaiting payment for your account');
+
+      ctx.send({
+        success: true,
+        data: {
+          amountDue: quote.amountDue,
+          currency: quote.buyerCurrency,
+          totalPrice: quote.totalPrice,
+          itemCurrency: quote.itemCurrency,
+          walletApplied: quote.walletAppliedInItemCurrency,
+          walletCurrency: quote.walletCurrency,
+        },
+      });
+    } catch (err: any) {
+      strapi.log.error('[Bidz4uPay:winnerQuote]', err);
+      ctx.internalServerError(err.message || 'Failed to calculate winner payment');
+    }
+  },
+
   // ──────────────────────────────────────────────────────────────────────────
   // POST /bidz4upay/initiate   (auth required)
   // ──────────────────────────────────────────────────────────────────────────
   async initiate(ctx: any) {
+    let payRecord: any = null;
     try {
       const userId = ctx.state.user?.id;
       if (!userId) return ctx.unauthorized('Authentication required');
@@ -287,23 +453,34 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
         callbackUrl,
       } = ctx.request.body as Record<string, any>;
 
-      if (!purpose || !amount) return ctx.badRequest('purpose and amount are required');
+      if (!purpose || (purpose !== 'winnerpay' && !amount)) return ctx.badRequest('purpose and amount are required');
       if (!['walletdeposit', 'winnerpay'].includes(purpose)) return ctx.badRequest('Invalid purpose');
 
-      const numAmount = parseFloat(amount);
-      if (!Number.isFinite(numAmount) || numAmount <= 0) return ctx.badRequest('amount must be a positive number');
+      let numAmount = Number(amount || 0);
+      if (!Number.isFinite(numAmount) || numAmount < 0 || (purpose === 'walletdeposit' && numAmount <= 0)) {
+        return ctx.badRequest('amount must be a positive number');
+      }
+      let paymentMetadata = metadata;
       if (purpose === 'winnerpay') {
         if (!relatedEntityId) return ctx.badRequest('relatedEntityId is required for winnerpay');
-        const auctionItem = await strapi.db.query('api::auction-item.auction-item').findOne({
-          where: { id: relatedEntityId },
-          populate: { currentWinningBuyer: true },
-        });
-        if (!auctionItem || auctionItem.currentWinningBuyer?.id !== userId) {
+        const quote = await getWinnerPaymentQuote(String(relatedEntityId), userId);
+        if (!quote) {
           return ctx.forbidden('Only the winning bidder can make this payment');
         }
-        if (auctionItem.actAuctionStatus !== 'payment_pending') {
-          return ctx.badRequest('This auction is not awaiting payment');
+        numAmount = quote.amountDue;
+        if (quote.walletDebit > 0 && quote.wallet?.id) {
+          const currentWallet = await strapi.db.query('api::wallet.wallet').findOne({ where: { id: quote.wallet.id } });
+          const available = Number(currentWallet?.wltAvailableBalance || 0);
+          if (!currentWallet || available < quote.walletDebit) return ctx.badRequest('Wallet balance changed; refresh and try again');
         }
+        paymentMetadata = {
+          ...metadata,
+          winnerWalletId: quote.wallet?.id || null,
+          winnerWalletDebit: quote.walletDebit,
+          winnerWalletHeld: quote.walletHeld,
+          winnerWalletRefund: quote.walletRefund,
+          winnerWalletCurrency: quote.walletCurrency,
+        };
       }
       const user = await getUserWithCountry(userId);
       const userCountry = user?.country;
@@ -319,7 +496,7 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
       const reference = buildReference(userId, purpose, formattedPhone || user?.username || '');
       const paymentId = `BID4U-${Date.now()}`;
 
-      const payRecord = await strapi.db.query('api::bidz4upay.bidz4upay').create({
+      payRecord = await strapi.db.query('api::bidz4upay.bidz4upay').create({
         data: {
           payPaymentId: paymentId,
           payReference: reference,
@@ -334,10 +511,20 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
           payRelatedEntityId: relatedEntityId ? String(relatedEntityId) : null,
           payInitiatedAt: new Date(),
           payIpAddress: ctx.request.ip,
-          payMetadata: { ...metadata },
+          payMetadata: { ...paymentMetadata },
           payNotes: narration || null,
         },
       });
+
+      if (purpose === 'winnerpay' && numAmount === 0) {
+        const completedRecord = await strapi.db.query('api::bidz4upay.bidz4upay').findOne({ where: { id: payRecord.id } });
+        await handleWinnerPaymentSuccess(completedRecord, String(relatedEntityId), { walletOnly: true });
+        await strapi.db.query('api::bidz4upay.bidz4upay').update({
+          where: { id: payRecord.id },
+          data: { payStatus: 'completed', payCompletedAt: new Date() },
+        });
+        return ctx.send({ success: true, data: { paymentId, reference, amount: 0, paymentStatus: 'completed' } });
+      }
 
       const result: any = await gateway.initiatePayment({
         reference,
@@ -364,6 +551,16 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
         },
       });
     } catch (err: any) {
+      if (payRecord?.id) {
+        try {
+          await strapi.db.query('api::bidz4upay.bidz4upay').update({
+            where: { id: payRecord.id },
+            data: { payStatus: 'failed', payFailedAt: new Date(), payFailureReason: err.message || 'Payment initiation failed' },
+          });
+        } catch (recordError) {
+          strapi.log.error('[Bidz4uPay:initiate] Failed to mark payment failed', recordError);
+        }
+      }
       strapi.log.error('[Bidz4uPay:initiate]', err);
       ctx.internalServerError(err.message || 'Failed to initiate payment');
     }
@@ -443,16 +640,27 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
         await strapi.db.query('api::bidz4upay.bidz4upay').update({
           where: { id: payRecord.id },
           data: {
-            payStatus: 'completed',
             payGatewayResponse: data,
             payMethod: paymentMethod,
-            payCompletedAt: new Date(),
           },
         });
 
         const updated = await strapi.db.query('api::bidz4upay.bidz4upay').findOne({ where: { id: payRecord.id } });
-        await handleCollectionSuccess(updated, parsed, data);
+        if (parsed.purpose === 'winnerpay') {
+          await handleWinnerPaymentSuccess(updated, String(updated.payRelatedEntityId), data);
+          await strapi.db.query('api::bidz4upay.bidz4upay').update({
+            where: { id: payRecord.id },
+            data: { payStatus: 'completed', payCompletedAt: new Date() },
+          });
+        } else {
+          await strapi.db.query('api::bidz4upay.bidz4upay').update({
+            where: { id: payRecord.id },
+            data: { payStatus: 'completed', payCompletedAt: new Date() },
+          });
+          await handleCollectionSuccess(updated, parsed, data);
+        }
       } else if (gateway.isCollectionFailed(event, data)) {
+        if (payRecord.payStatus === 'failed') return;
         await strapi.db.query('api::bidz4upay.bidz4upay').update({
           where: { id: payRecord.id },
           data: {

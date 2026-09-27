@@ -479,27 +479,33 @@ export default factories.createCoreController('api::auction-item.auction-item', 
       if (item.actAuctionStatus !== 'active') return ctx.badRequest('Auction is not active');
       if (!item.currentWinningBuyer) return ctx.badRequest('There is no bid to accept');
 
-      const updated = await strapi.db.query('api::auction-item.auction-item').update({
+      const { closeAuctionAndRefundNonWinners } = await import('../../../services/bidDepositLifecycle');
+      await closeAuctionAndRefundNonWinners(strapi, item, 'payment_pending');
+      const { autoSettleFromWinningBidDeposit } = await import('../../../services/lockedBidAutoSettlement');
+      const automaticallySettled = await autoSettleFromWinningBidDeposit(strapi, item.id);
+      const updated = await strapi.db.query('api::auction-item.auction-item').findOne({
         where: { id },
-        data: { actAuctionStatus: 'payment_pending' },
         populate: { seller: true, currentWinningBuyer: true },
       });
 
       const socketService = (await import('../../../services/socketService')).default;
       const { notifyAuctionClosed } = await import('../../../services/auctionNotifications');
       socketService.emitAuctionClosed(item.id, item.currentWinningBuyer.id);
-      socketService.emitPaymentRequired(
-        item.currentWinningBuyer.id,
-        item.id,
-        Number(item.actCurrentHighestPriceNative),
-        item.actNativeCurrencyCode
-      );
+      if (!automaticallySettled) {
+        socketService.emitPaymentRequired(
+          item.currentWinningBuyer.id,
+          item.id,
+          Number(item.actCurrentHighestPriceNative),
+          item.actNativeCurrencyCode
+        );
+      }
       await notifyAuctionClosed(strapi, {
         auctionItemId: item.id,
         sellerId: item.seller?.id,
         winnerId: item.currentWinningBuyer.id,
         amount: item.actCurrentHighestPriceNative,
         currency: item.actNativeCurrencyCode,
+        paymentCompleted: automaticallySettled,
       });
 
       ctx.send({ success: true, data: updated });
@@ -550,13 +556,13 @@ export default factories.createCoreController('api::auction-item.auction-item', 
     try {
       const userId = ctx.state.user?.id;
       const { id } = ctx.params;
-      const { role } = ctx.request.body; // 'buyer' | 'seller'
+      const { role, isDigital = false, evidenceId } = ctx.request.body;
       if (!userId) return ctx.unauthorized('Login required');
       if (!['buyer', 'seller'].includes(role)) return ctx.badRequest('role must be buyer or seller');
 
       const item = await strapi.db.query('api::auction-item.auction-item').findOne({
         where: { id },
-        populate: ['seller', 'currentWinningBuyer'],
+        populate: ['seller', 'currentWinningBuyer', 'actBuyerDeliveryEvidence', 'itemOriginCountry'],
       });
       if (!item) return ctx.notFound('Auction item not found');
 
@@ -565,19 +571,107 @@ export default factories.createCoreController('api::auction-item.auction-item', 
       if (role === 'seller' && !isSeller) return ctx.forbidden('Not the seller of this item');
       if (role === 'buyer' && !isBuyer) return ctx.forbidden('Not the winning buyer of this item');
 
-      const updateField = role === 'seller' ? 'actSellerConfirmedDelivery' : 'actBuyerConfirmedDelivery';
-      const updated = await strapi.db.query('api::auction-item.auction-item').update({
-        where: { id },
-        data: { [updateField]: true },
-      });
+      if (role === 'buyer') {
+        if (item.actAuctionStatus !== 'sold') return ctx.badRequest('Payment must be completed before confirming delivery');
+        if (item.actEscrowReleased) return ctx.badRequest('Escrow has already been released');
+        if (evidenceId) {
+          const evidence = await strapi.db.query('plugin::upload.file').findOne({
+            where: { id: evidenceId },
+            select: ['id', 'mime'],
+          });
+          if (!evidence || !String(evidence.mime || '').startsWith('image/')) {
+            return ctx.badRequest('Delivery evidence must be an uploaded image');
+          }
+          if (String(item.actBuyerDeliveryEvidence?.id) !== String(evidenceId)) {
+            return ctx.badRequest('Upload the delivery photo to this auction before confirming receipt');
+          }
+        }
+        if (!isDigital && !evidenceId && !item.actBuyerDeliveryEvidence) {
+          return ctx.badRequest('Upload a photo of the received item or mark it as digital');
+        }
+      }
 
-      if (updated.actBuyerConfirmedDelivery && updated.actSellerConfirmedDelivery) {
-        await strapi.db.query('api::auction-item.auction-item').update({
-          where: { id },
-          data: { actAuctionStatus: 'sold' },
+      const updateField = role === 'seller' ? 'actSellerConfirmedDelivery' : 'actBuyerConfirmedDelivery';
+      const updateData: Record<string, unknown> = { [updateField]: true };
+      if (role === 'buyer') updateData.actBuyerDeliveryIsDigital = Boolean(isDigital);
+      if (role === 'buyer' && evidenceId) updateData.actBuyerDeliveryEvidence = evidenceId;
+
+      if (role === 'buyer') {
+        const sellerWallet = await strapi.db.query('api::wallet.wallet').findOne({
+          where: { walletOwner: item.seller?.id },
+        });
+        const escrowAmount = Number(item.actEscrowAmount || 0);
+        const lockedBalance = Number(sellerWallet?.wltLockedEscrowBalance || 0);
+        if (!sellerWallet || lockedBalance < escrowAmount) {
+          return ctx.badRequest('Seller escrow balance is unavailable; contact support before confirming delivery');
+        }
+        const { resolveSettingsForCountry } = await import('../../../services/settingsResolver');
+        const { convertAmount } = await import('../../../services/currencyConversion');
+        const settings = await resolveSettingsForCountry(strapi, item.itemOriginCountry?.id);
+        const commissionType = settings.commissionType || 'percentage';
+        const configuredCommission = Math.max(0, Number(settings.commission || 0));
+        const escrowCurrency = String(item.actEscrowCurrencyCode || 'ZMW').toUpperCase();
+        const configuredCommissionCurrency = String(settings._commissionCurrency || escrowCurrency).toUpperCase();
+        const calculatedCommission = commissionType === 'flatrate'
+          ? configuredCommissionCurrency === escrowCurrency
+            ? configuredCommission
+            : await convertAmount(configuredCommission, configuredCommissionCurrency, escrowCurrency)
+          : escrowAmount * configuredCommission / 100;
+        const commissionAmount = Math.min(escrowAmount, Math.max(0, calculatedCommission));
+        const sellerNetAmount = escrowAmount - commissionAmount;
+
+        await strapi.db.transaction(async () => {
+          await strapi.db.query('api::wallet.wallet').update({
+            where: { id: sellerWallet.id },
+            data: {
+              wltLockedEscrowBalance: lockedBalance - escrowAmount,
+              wltAvailableBalance: Number(sellerWallet.wltAvailableBalance || 0) + sellerNetAmount,
+            },
+          });
+          await strapi.db.query('api::auction-item.auction-item').update({
+            where: { id },
+            data: {
+              ...updateData,
+              actEscrowReleased: true,
+              actCommissionAmount: commissionAmount,
+              actCommissionCurrencyCode: escrowCurrency,
+            },
+          });
+          await strapi.db.query('api::transaction.transaction').create({
+            data: {
+              txReference: `TXN-ESCROW-RELEASE-${id}-${Date.now()}`,
+              txAmount: sellerNetAmount,
+              txCurrencyCodeAtExecution: escrowCurrency,
+              txType: 'escrow_release',
+              txStatus: 'completed',
+              txMeta: { auctionItemId: item.id, buyerId: userId, grossAmount: escrowAmount, commissionAmount },
+              wallet: sellerWallet.id,
+            },
+          });
+          if (commissionAmount > 0) {
+            await strapi.db.query('api::transaction.transaction').create({
+              data: {
+                txReference: `TXN-COMMISSION-${id}-${Date.now()}`,
+                txAmount: commissionAmount,
+                txCurrencyCodeAtExecution: escrowCurrency,
+                txType: 'commission',
+                txStatus: 'completed',
+                txMeta: { auctionItemId: item.id, grossAmount: escrowAmount, commissionType, configuredCommission },
+                wallet: sellerWallet.id,
+              },
+            });
+          }
+        });
+        return ctx.send({
+          success: true,
+          item: { ...item, ...updateData, actEscrowReleased: true, actCommissionAmount: commissionAmount, actCommissionCurrencyCode: escrowCurrency },
         });
       }
 
+      const updated = await strapi.db.query('api::auction-item.auction-item').update({
+        where: { id },
+        data: updateData,
+      });
       ctx.send({ success: true, item: updated });
     } catch (error) {
       console.error('Error confirming delivery:', error);

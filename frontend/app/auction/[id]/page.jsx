@@ -26,7 +26,7 @@ import { useSocket, getDisplayedAuctionPrice, getDisplayedAuctionStatus, useView
 import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
 import { formatCurrency, getCurrencySymbol, isDraftListing } from '@/Functions';
 import BottomNav from '@/components/BottomNav';
-import Bidz4uPayModal from '@/components/Bidz4uPayModal';
+import ConfirmDeliveryModal from '@/components/ConfirmDeliveryModal';
 import { CUSTOM_THEME_COLORS, STORAGE_KEYS } from '@/Constants';
 
 export default function AuctionDetailPage() {
@@ -51,7 +51,7 @@ export default function AuctionDetailPage() {
   const [acceptingPrice, setAcceptingPrice] = useState(false);
   const [acceptError, setAcceptError] = useState('');
   const [isWinner, setIsWinner] = useState(false);
-  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
 
   // What the VIEWER types into the bid box is in THEIR OWN currency
   // (bidAmountLocal — bid.place converts it server-side into the auction's
@@ -467,19 +467,29 @@ const handleAcceptPrice = async () => {
       )}
 
       {displayedStatus === 'payment_pending' && isWinner && (
-        <Button fullWidth variant="contained" color="secondary" onClick={() => setPaymentOpen(true)} sx={{ mb: 2 }}>
-          Pay for auction
+        <Button fullWidth variant="contained" color="secondary" onClick={() => router.push(`/auction/${routeDocumentId}/checkout`)} sx={{ mb: 2 }}>
+          Pay now
         </Button>
       )}
 
-      <Bidz4uPayModal
-        open={paymentOpen}
-        onClose={() => setPaymentOpen(false)}
-        amount={displayedPrice}
-        currency={viewerCurrencyCode}
-        relatedEntityId={numericItemId}
-        phoneCode={countryConfig?.savedPhoneCode}
-        onSuccess={() => setPaymentOpen(false)}
+      {displayedStatus === 'sold' && isWinner && !item.actEscrowReleased && (
+        <Alert
+          severity="info"
+          action={<Button color="inherit" size="small" onClick={() => setDeliveryOpen(true)}>Received</Button>}
+          sx={{ mb: 2 }}
+        >
+          Your item is awaiting delivery. Please wait for your item to be delivered and click Received to confirm you have received it.
+        </Alert>
+      )}
+      {displayedStatus === 'sold' && isWinner && item.actEscrowReleased && (
+        <Alert severity="success" sx={{ mb: 2 }}>Receipt confirmed. The seller’s escrow has been released.</Alert>
+      )}
+
+      <ConfirmDeliveryModal
+        open={deliveryOpen}
+        item={item}
+        onClose={() => setDeliveryOpen(false)}
+        onConfirmed={() => setItem((current) => ({ ...current, actEscrowReleased: true, actBuyerConfirmedDelivery: true }))}
       />
 
       <Dialog open={acceptDialogOpen} onClose={() => !acceptingPrice && setAcceptDialogOpen(false)}>

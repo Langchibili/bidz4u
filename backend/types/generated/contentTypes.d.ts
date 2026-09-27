@@ -467,6 +467,12 @@ export interface ApiAdmnSettingAdmnSetting extends Struct.SingleTypeSchema {
       Schema.Attribute.DefaultTo<true>;
     fallbackBidExtensionTriggerWindowMins: Schema.Attribute.Integer &
       Schema.Attribute.DefaultTo<10>;
+    fallbackCommission: Schema.Attribute.Decimal &
+      Schema.Attribute.DefaultTo<0>;
+    fallbackCommissionType: Schema.Attribute.Enumeration<
+      ['percentage', 'flatrate']
+    > &
+      Schema.Attribute.DefaultTo<'percentage'>;
     fallbackCoolDownPeriodAfterForfeitMins: Schema.Attribute.Integer &
       Schema.Attribute.DefaultTo<1440>;
     fallbackForfeitureSplitSellerPercentage: Schema.Attribute.Decimal &
@@ -574,10 +580,20 @@ export interface ApiAuctionItemAuctionItem extends Struct.CollectionTypeSchema {
       Schema.Attribute.DefaultTo<'scheduled'>;
     actBuyerConfirmedDelivery: Schema.Attribute.Boolean &
       Schema.Attribute.DefaultTo<false>;
+    actBuyerDeliveryEvidence: Schema.Attribute.Media;
+    actBuyerDeliveryIsDigital: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    actCommissionAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.DefaultTo<0>;
+    actCommissionCurrencyCode: Schema.Attribute.String;
     actCurrentHighestPriceNative: Schema.Attribute.Decimal &
       Schema.Attribute.DefaultTo<0>;
     actDeliveryConfirmationCode: Schema.Attribute.String;
     actDescription: Schema.Attribute.Text;
+    actEscrowAmount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
+    actEscrowCurrencyCode: Schema.Attribute.String;
+    actEscrowReleased: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     actImages: Schema.Attribute.Media<undefined, true>;
     actIsDraft: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     actListingTimeEnd: Schema.Attribute.DateTime & Schema.Attribute.Required;
@@ -642,6 +658,7 @@ export interface ApiBidBid extends Struct.CollectionTypeSchema {
     >;
     bidLocalCurrencyCode: Schema.Attribute.String & Schema.Attribute.Required;
     bidNativeCurrencyCode: Schema.Attribute.String & Schema.Attribute.Required;
+    bidSecuredDepositCurrencyCode: Schema.Attribute.String;
     bidSecuredDepositHeld: Schema.Attribute.Decimal & Schema.Attribute.Required;
     bidStatus: Schema.Attribute.Enumeration<
       ['active_leading', 'outbid_refunded', 'won_complete', 'won_forfeited']
@@ -789,6 +806,8 @@ export interface ApiCountryCountry extends Struct.CollectionTypeSchema {
     bidExtensionTriggerWindowMins: Schema.Attribute.Integer;
     cntIsActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
     cntPollIntervalMs: Schema.Attribute.Integer;
+    commission: Schema.Attribute.Decimal;
+    commissionType: Schema.Attribute.Enumeration<['percentage', 'flatrate']>;
     coolDownPeriodAfterForfeitMins: Schema.Attribute.Integer;
     countryCode: Schema.Attribute.String &
       Schema.Attribute.Required &
@@ -976,6 +995,7 @@ export interface ApiTransactionTransaction extends Struct.CollectionTypeSchema {
         'withdrawal',
         'escrow_lock',
         'escrow_release',
+        'commission',
         'refund',
         'forfeited_penalty',
       ]
