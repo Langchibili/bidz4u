@@ -393,16 +393,8 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
       });
 
       let automaticallySettled = false;
-      if (minRequiredNative >= bidAmountNative) {
-        const itemForSettlement = await strapi.db.query('api::auction-item.auction-item').findOne({
-          where: { id: auctionItem.id },
-          populate: { currentWinningBuyer: true, seller: true },
-        });
-        const { closeAuctionAndRefundNonWinners } = await import('../../../services/bidDepositLifecycle');
-        await closeAuctionAndRefundNonWinners(strapi, itemForSettlement, 'payment_pending');
-        const { autoSettleFromWinningBidDeposit } = await import('../../../services/lockedBidAutoSettlement');
-        automaticallySettled = await autoSettleFromWinningBidDeposit(strapi, auctionItem.id);
-      }
+      const { autoSettleFromWinningBidDeposit } = await import('../../../services/lockedBidAutoSettlement');
+      automaticallySettled = await autoSettleFromWinningBidDeposit(strapi, auctionItem.id);
 
       const now = Date.now();
       const endTime = new Date(auctionItem.actListingTimeEnd).getTime();

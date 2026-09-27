@@ -2,6 +2,7 @@ import { factories } from '@strapi/strapi';
 import { getPaymentGateway } from '../../../paymentGatewayAdapters';
 import { resolveSettingsForCountry } from '../../../services/settingsResolver';
 import { convertAmount } from '../../../services/currencyConversion';
+import { getUnreservedLockedBalance } from '../../../services/lockedBidAutoSettlement';
 import socketService from '../../../services/socketService';
 
 // ─── Reference helpers ────────────────────────────────────────────────────────
@@ -84,23 +85,29 @@ async function getWinnerPaymentQuote(auctionItemId: string, winnerId: number) {
     where: { auctionItem: item.id, bidder: winnerId, bidStatus: 'active_leading' },
   });
   const lockedHeld = Number(winningBid?.bidSecuredDepositHeld || 0);
-  const lockedCurrency = String(winningBid?.bidSecuredDepositCurrencyCode || walletCurrency).toUpperCase();
+  const heldCurrency = String(winningBid?.bidSecuredDepositCurrencyCode || walletCurrency).toUpperCase();
   const price = Number(item.actCurrentHighestPriceNative || 0);
   const itemCurrency = String(item.actNativeCurrencyCode || '').toUpperCase();
   const lockedBalance = Number(wallet?.wltLockedEscrowBalance || 0);
-  if (lockedHeld > 0 && lockedBalance < lockedHeld) {
+  const lockedAvailable = wallet
+    ? await getUnreservedLockedBalance(strapi, winnerId, wallet, Number(winningBid?.id || 0))
+    : 0;
+  const winningBidHoldInWalletCurrency = heldCurrency === walletCurrency
+    ? lockedHeld
+    : await convertAmount(lockedHeld, heldCurrency, walletCurrency);
+  if (lockedHeld > 0 && lockedAvailable < winningBidHoldInWalletCurrency) {
     throw new Error('The winning bid deposit is not present in locked escrow balance');
   }
-  const lockedInItemCurrency = lockedCurrency === itemCurrency
-    ? lockedHeld
-    : await convertAmount(lockedHeld, lockedCurrency, itemCurrency);
+  const lockedInItemCurrency = walletCurrency === itemCurrency
+    ? lockedAvailable
+    : await convertAmount(lockedAvailable, walletCurrency, itemCurrency);
   const walletAppliedInItemCurrency = Math.min(price, lockedInItemCurrency);
   const walletDebit = walletAppliedInItemCurrency > 0
-    ? Math.min(lockedHeld, lockedCurrency === itemCurrency
+    ? Math.min(lockedAvailable, walletCurrency === itemCurrency
       ? walletAppliedInItemCurrency
-      : await convertAmount(walletAppliedInItemCurrency, itemCurrency, lockedCurrency))
+      : await convertAmount(walletAppliedInItemCurrency, itemCurrency, walletCurrency))
     : 0;
-  const walletRefund = Math.max(0, lockedHeld - walletDebit);
+  const walletRefund = Math.max(0, lockedAvailable - walletDebit);
   const remainingInItemCurrency = Math.max(0, price - walletAppliedInItemCurrency);
   const amountDue = remainingInItemCurrency > 0
     ? await convertAmount(remainingInItemCurrency, itemCurrency, buyerCurrency)
@@ -112,7 +119,7 @@ async function getWinnerPaymentQuote(auctionItemId: string, winnerId: number) {
     buyerCurrency,
     walletCurrency,
     walletDebit: Math.round(walletDebit * 100) / 100,
-    walletHeld: Math.round(lockedHeld * 100) / 100,
+    walletHeld: Math.round(lockedAvailable * 100) / 100,
     walletRefund: Math.round(walletRefund * 100) / 100,
     amountDue,
     totalPrice: price,
@@ -470,8 +477,8 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
         numAmount = quote.amountDue;
         if (quote.walletDebit > 0 && quote.wallet?.id) {
           const currentWallet = await strapi.db.query('api::wallet.wallet').findOne({ where: { id: quote.wallet.id } });
-          const available = Number(currentWallet?.wltAvailableBalance || 0);
-          if (!currentWallet || available < quote.walletDebit) return ctx.badRequest('Wallet balance changed; refresh and try again');
+          const locked = Number(currentWallet?.wltLockedEscrowBalance || 0);
+          if (!currentWallet || locked < quote.walletHeld) return ctx.badRequest('Locked wallet balance changed; refresh and try again');
         }
         paymentMetadata = {
           ...metadata,

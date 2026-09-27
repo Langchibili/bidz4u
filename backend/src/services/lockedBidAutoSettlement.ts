@@ -1,18 +1,37 @@
 import { convertAmount } from './currencyConversion';
 import socketService from './socketService';
 
+export async function getUnreservedLockedBalance(strapi: any, bidderId: number, wallet: any, excludedBidId: number): Promise<number> {
+  const leadingBids = await strapi.db.query('api::bid.bid').findMany({
+    where: { bidder: bidderId, bidStatus: 'active_leading' },
+  });
+  const walletCurrency = String(wallet.currency?.currCode || 'ZMW').toUpperCase();
+  let reservedBalance = 0;
+
+  for (const bid of leadingBids) {
+    if (Number(bid.id) === Number(excludedBidId)) continue;
+    const heldAmount = Number(bid.bidSecuredDepositHeld || 0);
+    if (heldAmount <= 0) continue;
+    const heldCurrency = String(bid.bidSecuredDepositCurrencyCode || walletCurrency).toUpperCase();
+    reservedBalance += heldCurrency === walletCurrency
+      ? heldAmount
+      : await convertAmount(heldAmount, heldCurrency, walletCurrency);
+  }
+
+  return Math.max(0, Number(wallet.wltLockedEscrowBalance || 0) - reservedBalance);
+}
+
 export async function autoSettleFromWinningBidDeposit(strapi: any, itemId: number): Promise<boolean> {
   const item = await strapi.db.query('api::auction-item.auction-item').findOne({
     where: { id: itemId },
     populate: { currentWinningBuyer: true, seller: true },
   });
-  if (!item || item.actAuctionStatus !== 'payment_pending' || !item.currentWinningBuyer?.id || !item.seller?.id) return false;
+  if (!item || !['active', 'payment_pending'].includes(item.actAuctionStatus) || !item.currentWinningBuyer?.id || !item.seller?.id) return false;
 
   const bid = await strapi.db.query('api::bid.bid').findOne({
     where: { auctionItem: item.id, bidder: item.currentWinningBuyer.id, bidStatus: 'active_leading' },
   });
-  const heldAmount = Number(bid?.bidSecuredDepositHeld || 0);
-  if (heldAmount <= 0) return false;
+  if (!bid) return false;
 
   const buyerWallet = await strapi.db.query('api::wallet.wallet').findOne({
     where: { walletOwner: item.currentWinningBuyer.id },
@@ -24,21 +43,23 @@ export async function autoSettleFromWinningBidDeposit(strapi: any, itemId: numbe
   });
   if (!buyerWallet || !sellerWallet) return false;
 
-  const depositCurrency = String(bid.bidSecuredDepositCurrencyCode || buyerWallet.currency?.currCode || 'ZMW').toUpperCase();
-  const buyerWalletCurrency = String(buyerWallet.currency?.currCode || depositCurrency).toUpperCase();
+  const buyerWalletCurrency = String(buyerWallet.currency?.currCode || bid.bidSecuredDepositCurrencyCode || 'ZMW').toUpperCase();
   const itemCurrency = String(item.actNativeCurrencyCode || '').toUpperCase();
   const salePrice = Number(item.actCurrentHighestPriceNative || 0);
-  const heldInItemCurrency = depositCurrency === itemCurrency
-    ? heldAmount
-    : await convertAmount(heldAmount, depositCurrency, itemCurrency);
-  if (heldInItemCurrency < salePrice) return false;
+  const lockedToApply = await getUnreservedLockedBalance(strapi, item.currentWinningBuyer.id, buyerWallet, bid.id);
+  const lockedInItemCurrency = buyerWalletCurrency === itemCurrency
+    ? lockedToApply
+    : await convertAmount(lockedToApply, buyerWalletCurrency, itemCurrency);
+  if (lockedInItemCurrency < salePrice) return false;
 
-  const depositUsed = Math.min(heldAmount, depositCurrency === itemCurrency
+  const depositUsed = Math.min(lockedToApply, buyerWalletCurrency === itemCurrency
     ? salePrice
-    : await convertAmount(salePrice, itemCurrency, depositCurrency));
-  const depositExcess = Math.max(0, heldAmount - depositUsed);
-  if (Number(buyerWallet.wltLockedEscrowBalance || 0) < heldAmount) {
-    throw new Error(`Winning bid deposit missing from locked balance for auction ${item.id}`);
+    : await convertAmount(salePrice, itemCurrency, buyerWalletCurrency));
+  const depositExcess = Math.max(0, lockedToApply - depositUsed);
+
+  if (item.actAuctionStatus === 'active') {
+    const { closeAuctionAndRefundNonWinners } = await import('./bidDepositLifecycle');
+    await closeAuctionAndRefundNonWinners(strapi, item, 'payment_pending');
   }
 
   const sellerCurrency = String(sellerWallet.currency?.currCode || itemCurrency).toUpperCase();
@@ -53,7 +74,7 @@ export async function autoSettleFromWinningBidDeposit(strapi: any, itemId: numbe
     await strapi.db.query('api::wallet.wallet').update({
       where: { id: buyerWallet.id },
       data: {
-        wltLockedEscrowBalance: Number(buyerWallet.wltLockedEscrowBalance || 0) - heldAmount,
+        wltLockedEscrowBalance: Number(buyerWallet.wltLockedEscrowBalance || 0) - lockedToApply,
         wltAvailableBalance: Number(buyerWallet.wltAvailableBalance || 0) + depositExcess,
       },
     });
@@ -82,7 +103,7 @@ export async function autoSettleFromWinningBidDeposit(strapi: any, itemId: numbe
       data: {
         txReference: `TXN-AUTO-WINNER-DEPOSIT-${item.id}`,
         txAmount: depositUsed,
-        txCurrencyCodeAtExecution: depositCurrency,
+        txCurrencyCodeAtExecution: buyerWalletCurrency,
         txType: 'escrow_release',
         txStatus: 'completed',
         txMeta: { auctionItemId: item.id, appliedToPurchase: true, automaticSettlement: true },
@@ -94,7 +115,7 @@ export async function autoSettleFromWinningBidDeposit(strapi: any, itemId: numbe
         data: {
           txReference: `TXN-AUTO-WINNER-EXCESS-${item.id}`,
           txAmount: depositExcess,
-          txCurrencyCodeAtExecution: depositCurrency,
+          txCurrencyCodeAtExecution: buyerWalletCurrency,
           txType: 'escrow_release',
           txStatus: 'completed',
           txMeta: { auctionItemId: item.id, reason: 'winning deposit exceeded purchase price' },

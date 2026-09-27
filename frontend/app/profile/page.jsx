@@ -120,16 +120,6 @@ export default function ProfilePage() {
             {formatCurrency(Number(wallet?.wltLockedEscrowBalance || 0) * walletRate, profileCurrencySymbol)}
           </Typography>
         )}
-        <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#81a784' }}>
-          Locked Balance
-        </Typography>
-        {walletLoading || !isWalletPriceReady ? (
-          <Skeleton variant="text" width={160} height={30} />
-        ) : (
-          <Typography variant="body1" sx={{ fontWeight: 700, color: '#81a784', opacity: 0.75 }}>
-            {formatCurrency(Number(wallet?.wltLockedEscrowBalance || 0) * walletRate, profileCurrencySymbol)}
-          </Typography>
-        )}
         <Button size="small" color="secondary" onClick={() => router.push('/wallet')} sx={{ px: 0, minWidth: 0 }}>
           View more
         </Button>
