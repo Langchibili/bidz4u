@@ -34,6 +34,7 @@
     },
      "usrFullName": { "type": "string" },
     "usrPhoneNormalized": { "type": "string", "unique": true },
+    "usrVerifiedPaymentNumbers": { "type": "json", "default": [] },
     "usrEmailOptional": { "type": "email" },
     "usrKycVerified": { "type": "boolean", "default": false },
     "usrCoolDownUntil": { "type": "datetime" },

@@ -951,7 +951,9 @@ export interface ApiOtpVerificationOtpVerification
     otpCode: Schema.Attribute.String & Schema.Attribute.Required;
     otpExpiresAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
     otpPhoneNumber: Schema.Attribute.String;
-    otpPurpose: Schema.Attribute.Enumeration<['registration', 'login']> &
+    otpPurpose: Schema.Attribute.Enumeration<
+      ['registration', 'login', 'payment_phone']
+    > &
       Schema.Attribute.DefaultTo<'login'>;
     publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
@@ -1575,6 +1577,8 @@ export interface PluginUsersPermissionsUser
     usrKycVerified: Schema.Attribute.Boolean &
       Schema.Attribute.DefaultTo<false>;
     usrPhoneNormalized: Schema.Attribute.String & Schema.Attribute.Unique;
+    usrVerifiedPaymentNumbers: Schema.Attribute.JSON &
+      Schema.Attribute.DefaultTo<[]>;
   };
 }
 

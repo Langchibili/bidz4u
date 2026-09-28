@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Typography, Skeleton, Stack } from '@mui/material';
+import { Box, Typography, Skeleton, Stack, TextField, InputAdornment, Pagination } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
 import AuctionCard from '@/components/AuctionCard';
@@ -14,12 +15,21 @@ export default function Home() {
   const { isAuthenticated, hydrated, user } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchText, setSearchText] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
 
   useEffect(() => {
     if (hydrated && !isAuthenticated()) {
       router.push('/login');
     }
   }, [hydrated, isAuthenticated, router]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setSearch(searchText.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [searchText]);
 
   useEffect(() => {
     if (!hydrated) return undefined;
@@ -37,20 +47,50 @@ export default function Home() {
     // the actAuctionStatus filter alone already excludes them today — but a
     // future status change to a draft (e.g. via a backend bug) shouldn't be
     // the only thing keeping drafts off the public feed.
+    const params = new URLSearchParams({
+      'filters[actAuctionStatus][$eq]': 'active',
+      'filters[actIsDraft][$eq]': 'false',
+      'populate[actImages][fields][0]': 'url',
+      'populate[actImages][fields][1]': 'formats',
+      'populate[itemOriginCountry][fields][0]': 'id',
+      'populate[itemOriginCountry][fields][1]': 'countryName',
+      'populate[itemOriginCountry][fields][2]': 'countryCode',
+      'populate[itemOriginCountry][populate][currency][fields][0]': 'currCode',
+      'pagination[page]': String(page),
+      'pagination[pageSize]': '10',
+      sort: 'createdAt:desc',
+    });
+    if (search) {
+      params.set('filters[$or][0][actTitle][$containsi]', search);
+      params.set('filters[$or][1][actDescription][$containsi]', search);
+    }
+
+    setLoading(true);
     apiClient
-      .get(
-        '/auction-items?filters[actAuctionStatus][$eq]=active&filters[actIsDraft][$eq]=false&populate[actImages][fields][0]=url&populate[actImages][fields][1]=formats&populate[itemOriginCountry][fields][0]=id&populate[itemOriginCountry][fields][1]=countryName&populate[itemOriginCountry][fields][2]=countryCode&populate[itemOriginCountry][populate][currency][fields][0]=currCode&sort=createdAt:desc'
-      )
+      .get(`/auction-items?${params.toString()}`)
       .then((res) => {
-        if (!cancelled) setItems(res?.data || []);
+        if (!cancelled) {
+          setItems(Array.isArray(res?.data) ? res.data : []);
+          setPageCount(Math.max(1, Number(res?.meta?.pagination?.pageCount) || 1));
+        }
       })
-      .catch((err) => console.error('Failed to load auctions', err))
+      .catch((err) => {
+        console.error('Failed to load auctions', err);
+        if (!cancelled) {
+          setItems([]);
+          setPageCount(1);
+        }
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [hydrated, isAuthenticated, user?.id]);
+  }, [hydrated, isAuthenticated, user?.id, page, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   if (!hydrated) {
     return (
@@ -69,6 +109,25 @@ export default function Home() {
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>
         Live Auctions
       </Typography>
+
+      <TextField
+        fullWidth
+        value={searchText}
+        onChange={(event) => {
+          setSearchText(event.target.value);
+          setPage(1);
+        }}
+        placeholder="Search auction titles and descriptions"
+        aria-label="Search auctions"
+        sx={{ mb: 2.5 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon aria-hidden="true" />
+            </InputAdornment>
+          ),
+        }}
+      />
 
       {loading ? (
         <Stack spacing={1.5}>
@@ -95,7 +154,20 @@ export default function Home() {
       )}
 
       {!loading && items.length === 0 && (
-        <Typography color="text.secondary">No active auctions right now — check back soon.</Typography>
+        <Typography color="text.secondary">
+          {search ? 'No auctions match your search.' : 'No active auctions right now — check back soon.'}
+        </Typography>
+      )}
+
+      {!loading && items.length > 0 && (
+        <Pagination
+          count={pageCount}
+          page={page}
+          onChange={(_, nextPage) => setPage(nextPage)}
+          color="secondary"
+          aria-label="Auction pages"
+          sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}
+        />
       )}
 
       <BottomNav />

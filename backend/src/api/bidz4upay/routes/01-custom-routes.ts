@@ -7,6 +7,12 @@ export default {
       config: { auth: {} },
     },
     {
+      method: "GET",
+      path: "/bidz4upay/payment-phone",
+      handler: "bidz4upay.paymentPhone",
+      config: { auth: {} },
+    },
+    {
       method: "POST",
       path: "/bidz4upay/initiate",
       handler: "bidz4upay.initiate",

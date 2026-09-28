@@ -18,5 +18,17 @@ export default {
       handler: "otp-verification.verify",
       config: { auth: false },
     },
+    {
+      method: "POST",
+      path: "/auth-otp/payment-phone/send",
+      handler: "otp-verification.sendPaymentPhone",
+      config: { auth: {} },
+    },
+    {
+      method: "POST",
+      path: "/auth-otp/payment-phone/verify",
+      handler: "otp-verification.verifyPaymentPhone",
+      config: { auth: {} },
+    },
   ],
 };

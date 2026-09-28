@@ -79,6 +79,23 @@ export const SendSmsNotification = async (phoneNumber: string, notificationBody:
   }
 }
 
+export const SendSmsToPhone = async (phoneNumber: string, notificationBody: string): Promise<void> => {
+  try {
+    await axios.post(process.env.SMSGATEWAYURL + "/send-sms", {
+      apiKey: process.env.SMSGATEWAYAPIKEY,
+      username: process.env.SMSGATEWAYAPIUSERNAME,
+      recipients: [phoneNumber],
+      message: notificationBody,
+      from: process.env.SMSGATEWAYAPICALLERID
+    }, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    console.error('Error sending SMS:', error);
+    throw error;
+  }
+}
+
 export const SendEmailNotification = async (email: string, notificationBody: string): Promise<void> => {
   const emailConfig = await strapi.db.query('api::email-configuration.email-configuration').findOne()
   const EMAILSERVICEHOST = emailConfig?.config?.EMAILSERVICEHOST

@@ -36,7 +36,6 @@ export default function WalletPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
 
   const [amount, setAmount] = useState('');
-  const [phone, setPhone] = useState('');
   const [operator, setOperator] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [bankId, setBankId] = useState('');
@@ -188,7 +187,6 @@ export default function WalletPage() {
           </Tabs>
           {method === 'mobile_money' ? (
             <>
-              <TextField fullWidth label="Mobile money number" value={phone} onChange={(e) => setPhone(e.target.value)} />
               <TextField fullWidth label="Network / operator" value={operator} onChange={(e) => setOperator(e.target.value)} />
             </>
           ) : (
@@ -257,7 +255,7 @@ export default function WalletPage() {
         phoneCode={countryConfig?.savedPhoneCode}
         withdrawalDetails={{
           method,
-          ...(method === 'mobile_money' ? { phone, operator } : { accountNumber, bankId, accountName }),
+          ...(method === 'mobile_money' ? { operator } : { accountNumber, bankId, accountName }),
         }}
         onSuccess={() => {
           setPaymentOpen(false);

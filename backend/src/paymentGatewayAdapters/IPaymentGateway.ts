@@ -5,6 +5,8 @@ export interface InitiatePaymentParams {
   amount: number;
   currency: string;
   phone: string;
+  operator?: string;
+  country?: string;
   narration?: string;
   metadata?: Record<string, unknown>;
 }
@@ -18,6 +20,11 @@ export interface InitiatePayoutParams {
   amount: number;
   currency: string;
   phone: string;
+  method?: 'mobile_money' | 'bank_account';
+  operator?: string;
+  country?: string;
+  accountNumber?: string;
+  bankId?: string;
   narration?: string;
 }
 export interface InitiatePayoutResult {

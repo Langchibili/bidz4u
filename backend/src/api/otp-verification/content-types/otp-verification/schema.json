@@ -6,7 +6,7 @@
   "attributes": {
     "otpPhoneNumber": { "type": "string" },
     "otpCode": { "type": "string", "required": true },
-    "otpPurpose": { "type": "enumeration", "enum": ["registration", "login"], "default": "login" },
+    "otpPurpose": { "type": "enumeration", "enum": ["registration", "login", "payment_phone"], "default": "login" },
     "otpExpiresAt": { "type": "datetime", "required": true },
     "otpAttempts": { "type": "integer", "default": 0 }
   }

@@ -2,6 +2,7 @@ import { factories } from '@strapi/strapi';
 import { getPaymentGateway } from '../../../paymentGatewayAdapters';
 import { resolveSettingsForCountry } from '../../../services/settingsResolver';
 import { convertAmount } from '../../../services/currencyConversion';
+import { getAccountPhoneNumber, normalizePhoneNumber } from '../../../services/phoneNumber';
 import { getUnreservedLockedBalance } from '../../../services/lockedBidAutoSettlement';
 import socketService from '../../../services/socketService';
 
@@ -48,20 +49,21 @@ function resolvePaymentMethod(data: Record<string, unknown>): 'mobile_money' | '
   return 'mobile_money';
 }
 
-function normalisePhone(phone: string, phoneCode: string): string {
-  const code = String(phoneCode).replace(/\D/g, '');
-  let digits = String(phone).replace(/\D/g, '');
-  if (digits.startsWith(code)) digits = digits.slice(code.length);
-  digits = digits.replace(/^0+/, '');
-  return `${code}${digits.slice(-9)}`;
-}
-
 async function getUserWithCountry(userId: number) {
   return strapi.db.query('plugin::users-permissions.user').findOne({
     where: { id: userId },
-    select: ['id', 'email', 'username', 'usrFullName'],
+    select: ['id', 'email', 'username', 'usrPhoneNormalized', 'usrVerifiedPaymentNumbers', 'usrFullName'],
     populate: { country: { populate: { currency: true } }, userWallet: { populate: { currency: true } } },
   });
+}
+
+function isVerifiedPaymentPhone(user: any, phone: string, country: any): boolean {
+  const normalized = normalizePhoneNumber(phone, country).internationalDigits;
+  const accountPhone = normalizePhoneNumber(getAccountPhoneNumber(user, country), country).internationalDigits;
+  const verifiedNumbers: string[] = Array.isArray(user.usrVerifiedPaymentNumbers)
+    ? user.usrVerifiedPaymentNumbers
+    : [];
+  return normalized === accountPhone || verifiedNumbers.includes(normalized);
 }
 
 async function getWinnerPaymentQuote(auctionItemId: string, winnerId: number) {
@@ -434,6 +436,29 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
     }
   },
 
+  async paymentPhone(ctx: any) {
+    try {
+      const userId = ctx.state.user?.id;
+      if (!userId) return ctx.unauthorized('Authentication required');
+      const user = await getUserWithCountry(userId);
+      if (!user) return ctx.notFound('User not found');
+      const country = user.country;
+      const defaultPhone = normalizePhoneNumber(getAccountPhoneNumber(user, country), country);
+      ctx.send({
+        phoneCode: String(country?.savedPhoneCode || '260').replace(/\D/g, ''),
+        phoneNumberDigitLenth: Number(country?.phoneNumberDigitLenth) || 9,
+        defaultPhone: defaultPhone.localDigits,
+        defaultPhoneInternational: defaultPhone.internationalDigits,
+        verifiedPaymentNumbers: Array.isArray(user.usrVerifiedPaymentNumbers)
+          ? user.usrVerifiedPaymentNumbers
+          : [],
+      });
+    } catch (error: any) {
+      strapi.log.error('[Bidz4uPay:paymentPhone]', error);
+      ctx.badRequest(error.message || 'Unable to load payment phone details');
+    }
+  },
+
   // ──────────────────────────────────────────────────────────────────────────
   // POST /bidz4upay/initiate   (auth required)
   // ──────────────────────────────────────────────────────────────────────────
@@ -492,15 +517,27 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
       const user = await getUserWithCountry(userId);
       const userCountry = user?.country;
       const countryCode = (userCountry?.countryCode || 'zm').toLowerCase();
-      const phoneCode = (userCountry?.savedPhoneCode || '260').replace(/\D/g, '');
       const currencyCode = (userCountry?.currency?.currCode || 'ZMW').toUpperCase();
-      const formattedPhone = phone ? normalisePhone(phone, phoneCode) : '';
+      let formattedPhone = '';
+      let phoneDigits = '';
+      if (phone || purpose === 'walletdeposit' || numAmount > 0) {
+        try {
+          const normalized = normalizePhoneNumber(phone || user?.usrPhoneNormalized || user?.username, userCountry);
+          if (!isVerifiedPaymentPhone(user, normalized.internationalDigits, userCountry)) {
+            return ctx.forbidden('Verify this phone number before using it for payment');
+          }
+          formattedPhone = normalized.e164;
+          phoneDigits = normalized.internationalDigits;
+        } catch (error: any) {
+          return ctx.badRequest(error.message || 'Enter a valid phone number');
+        }
+      }
 
       const settings = await resolveSettingsForCountry(strapi, userCountry?.id);
       const gatewayName = String(settings.paymentGateway || 'pawapay');
       const gateway = getPaymentGateway(gatewayName);
 
-      const reference = buildReference(userId, purpose, formattedPhone || user?.username || '');
+      const reference = buildReference(userId, purpose, phoneDigits || user?.username || '');
       const paymentId = `BID4U-${Date.now()}`;
 
       payRecord = await strapi.db.query('api::bidz4upay.bidz4upay').create({
@@ -538,6 +575,8 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
         amount: numAmount,
         currency: currencyCode,
         phone: formattedPhone,
+        operator,
+        country: countryCode,
         narration: narration || purposeToNarration(purpose),
         metadata: { bidz4upayId: payRecord.id, userId, purpose, relatedEntityId },
       });
@@ -582,10 +621,56 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
       if (!userId) return ctx.unauthorized('Authentication required');
 
       const { reference } = ctx.params;
-      const record = await strapi.db.query('api::bidz4upay.bidz4upay').findOne({
+      let record = await strapi.db.query('api::bidz4upay.bidz4upay').findOne({
         where: { payReference: reference, user: userId },
       });
       if (!record) return ctx.notFound('Payment record not found');
+
+      if (['pending', 'processing'].includes(record.payStatus) && record.payGatewayName === 'lenco') {
+        const gateway = getPaymentGateway('lenco') as any;
+        if (typeof gateway.getCollectionStatus === 'function') {
+          const statusResult = await gateway.getCollectionStatus(record.payReference);
+          const status = String(statusResult.status || '').toLowerCase();
+          const gatewayData = statusResult.data || {};
+
+          if (status === 'successful') {
+            const parsed = parseReference(record.payReference);
+            if (!parsed) return ctx.badRequest('Invalid payment reference');
+            await strapi.db.query('api::bidz4upay.bidz4upay').update({
+              where: { id: record.id },
+              data: {
+                payGatewayReference: (gatewayData as any).id || record.payGatewayReference,
+                payGatewayResponse: gatewayData,
+                payMethod: resolvePaymentMethod(gatewayData),
+              },
+            });
+            record = await strapi.db.query('api::bidz4upay.bidz4upay').findOne({ where: { id: record.id } });
+            if (parsed.purpose === 'winnerpay') {
+              await handleWinnerPaymentSuccess(record, String(record.payRelatedEntityId), gatewayData);
+            } else {
+              await handleCollectionSuccess(record, parsed, gatewayData);
+            }
+            await strapi.db.query('api::bidz4upay.bidz4upay').update({
+              where: { id: record.id },
+              data: { payStatus: 'completed', payCompletedAt: new Date() },
+            });
+          } else if (status === 'failed') {
+            await strapi.db.query('api::bidz4upay.bidz4upay').update({
+              where: { id: record.id },
+              data: {
+                payStatus: 'failed',
+                payGatewayReference: (gatewayData as any).id || record.payGatewayReference,
+                payGatewayResponse: gatewayData,
+                payFailedAt: new Date(),
+                payFailureReason: (gatewayData as any).reasonForFailure || 'Payment failed',
+              },
+            });
+            socketService.emitPaymentFailed(userId, Number(record.payAmount), record.payReference);
+          }
+
+          record = await strapi.db.query('api::bidz4upay.bidz4upay').findOne({ where: { id: record.id } });
+        }
+      }
 
       ctx.send({
         paymentId: record.payPaymentId,
@@ -770,9 +855,19 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
       const user = await getUserWithCountry(userId);
       const userCountry = user?.country;
       const countryCode = (userCountry?.countryCode || 'zm').toLowerCase();
-      const phoneCode = (userCountry?.savedPhoneCode || '260').replace(/\D/g, '');
       const currencyCode = (userCountry?.currency?.currCode || 'ZMW').toUpperCase();
-      const formattedPhone = phone ? normalisePhone(phone, phoneCode) : '';
+      let formattedPhone = '';
+      if (method === 'mobile_money') {
+        try {
+          const normalized = normalizePhoneNumber(phone, userCountry);
+          if (!isVerifiedPaymentPhone(user, normalized.internationalDigits, userCountry)) {
+            return ctx.forbidden('Verify this phone number before using it for withdrawal');
+          }
+          formattedPhone = normalized.e164;
+        } catch (error: any) {
+          return ctx.badRequest(error.message || 'Enter a valid withdrawal phone number');
+        }
+      }
 
       const settings = await resolveSettingsForCountry(strapi, userCountry?.id);
       const gatewayName = String(settings.paymentGateway || 'pawapay');
@@ -792,7 +887,11 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
         data: { wltAvailableBalance: newBalance },
       });
 
-      const reference = buildReference(userId, 'withdraw', method === 'mobile_money' ? formattedPhone : accountNumber);
+      const reference = buildReference(
+        userId,
+        'withdraw',
+        method === 'mobile_money' ? formattedPhone.replace(/\D/g, '') : accountNumber,
+      );
       const paymentId = `BID4U-WD-${Date.now()}`;
 
       payRecord = await strapi.db.query('api::bidz4upay.bidz4upay').create({
@@ -820,18 +919,46 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
         currency: currencyCode,
         narration: narration || `Withdrawal for user ${userId}`,
         phone: formattedPhone || accountNumber,
+        method,
+        operator,
+        country: countryCode,
+        accountNumber,
+        bankId,
       });
 
+      const payoutStatus = result.status === 'completed'
+        ? 'completed'
+        : result.status === 'failed' ? 'failed' : 'processing';
       await strapi.db.query('api::bidz4upay.bidz4upay').update({
         where: { id: payRecord.id },
-        data: { payGatewayReference: result.gatewayReference },
+        data: {
+          payGatewayReference: result.gatewayReference,
+          payGatewayResponse: result.raw || null,
+          payStatus: payoutStatus,
+          ...(payoutStatus === 'completed' ? { payCompletedAt: new Date() } : {}),
+          ...(payoutStatus === 'failed' ? {
+            payFailedAt: new Date(),
+            payFailureReason: result.raw?.reasonForFailure || 'Withdrawal failed',
+          } : {}),
+        },
       });
+
+      if (payoutStatus === 'completed' || payoutStatus === 'failed') {
+        const completedRecord = await strapi.db.query('api::bidz4upay.bidz4upay').findOne({
+          where: { id: payRecord.id },
+        });
+        if (payoutStatus === 'completed') {
+          await handleWithdrawalCompleted(completedRecord, String(userId), result.raw || {});
+        } else {
+          await handleWithdrawalFailed(completedRecord, String(userId), result.raw || {});
+        }
+      }
 
       strapi.log.info(`[Bidz4uPay:requestWithdrawal] Withdrawal ${payRecord.id} initiated for user ${userId}, amount ${numAmount}`);
 
       ctx.send({
         success: true,
-        data: { paymentId, reference, status: 'processing', amount: numAmount, message: 'Withdrawal initiated.' },
+        data: { paymentId, reference, status: payoutStatus, paymentStatus: payoutStatus, amount: numAmount, message: 'Withdrawal initiated.' },
       });
     } catch (err: any) {
       strapi.log.error('[Bidz4uPay:requestWithdrawal]', err);
