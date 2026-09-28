@@ -182,13 +182,14 @@ export default function Bidz4uPayModal({
   }, [countryCode, localPhoneDigits]);
 
   const requestPhoneVerification = async () => {
+    setOtpOpen(true);
     try {
       setOtpBusy(true);
-      setOtpMessage('');
+      setOtpMessage('Sending verification code…');
       await apiClient.post('/auth-otp/payment-phone/send', { phoneNumber: paymentPhone });
-      setOtpOpen(true);
+      setOtpMessage('Code sent. Enter the 6-digit code to verify this number.');
     } catch (error) {
-      setMessage(error.message || 'Unable to send a verification code.');
+      setOtpMessage(error.message || 'Unable to send a verification code. Try again.');
     } finally {
       setOtpBusy(false);
     }
@@ -472,7 +473,11 @@ export default function Bidz4uPayModal({
             onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
             inputProps={{ inputMode: 'numeric', maxLength: 6 }}
           />
-          {otpMessage && <Alert severity="error" sx={{ mt: 2 }}>{otpMessage}</Alert>}
+          {otpMessage && (
+            <Alert severity={otpBusy && otpMessage.startsWith('Sending') ? 'info' : otpMessage.startsWith('Code sent') ? 'success' : 'error'} sx={{ mt: 2 }}>
+              {otpMessage}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={requestPhoneVerification} disabled={otpBusy}>Resend code</Button>
