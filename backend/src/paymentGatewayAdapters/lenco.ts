@@ -33,6 +33,8 @@ async function requestLenco(path: string, method: 'GET' | 'POST', body?: Record<
 
 export class LencoAdapter implements IPaymentGateway {
   async initiatePayment(params: InitiatePaymentParams): Promise<InitiatePaymentResult> {
+    if (params.paymentType === 'card') return this.initiateCardPayment(params);
+
     const result = await requestLenco('/collections/mobile-money', 'POST', {
       amount: params.amount.toFixed(2),
       reference: params.reference,
@@ -45,6 +47,83 @@ export class LencoAdapter implements IPaymentGateway {
     return {
       gatewayReference: data.id || data.lencoReference || params.reference,
       status: data.status || 'pending',
+      raw: data,
+    };
+  }
+
+  private async encryptCardPayload(payload: Record<string, unknown>): Promise<string> {
+    const keyResponse = await requestLenco('/encryption-key', 'GET');
+    const jwk = keyResponse.data?.publicKey;
+    if (!jwk) throw new Error('Lenco did not return a card encryption key');
+
+    const protectedHeader = Buffer.from(JSON.stringify({
+      alg: 'RSA-OAEP-256',
+      enc: 'A256GCM',
+      cty: 'application/json',
+      kid: jwk.kid,
+    })).toString('base64url');
+    const contentKey = crypto.randomBytes(32);
+    const encryptedKey = crypto.publicEncrypt({
+      key: crypto.createPublicKey({ key: jwk, format: 'jwk' }),
+      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256',
+    }, contentKey);
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', contentKey, iv);
+    cipher.setAAD(Buffer.from(protectedHeader));
+    const ciphertext = Buffer.concat([
+      cipher.update(JSON.stringify(payload), 'utf8'),
+      cipher.final(),
+    ]);
+
+    return [
+      protectedHeader,
+      encryptedKey.toString('base64url'),
+      iv.toString('base64url'),
+      ciphertext.toString('base64url'),
+      cipher.getAuthTag().toString('base64url'),
+    ].join('.');
+  }
+
+  private async initiateCardPayment(params: InitiatePaymentParams): Promise<InitiatePaymentResult> {
+    if (!params.card || !params.customer) {
+      throw new Error('Card details and cardholder name are required');
+    }
+    const encryptedPayload = await this.encryptCardPayload({
+      reference: params.reference,
+      email: params.email,
+      amount: params.amount.toFixed(2),
+      currency: params.currency || 'ZMW',
+      bearer: 'merchant',
+      customer: {
+        firstName: params.customer.firstName,
+        lastName: params.customer.lastName,
+      },
+      billing: {
+        streetAddress: params.billing?.streetAddress || '',
+        city: params.billing?.city || '',
+        state: params.billing?.state || '',
+        postalCode: params.billing?.postalCode || '',
+        country: params.billing?.country || (params.country || 'zm').toUpperCase(),
+      },
+      card: {
+        number: params.card.number.replace(/\s/g, ''),
+        expiryMonth: params.card.expiryMonth,
+        expiryYear: params.card.expiryYear,
+        cvv: params.card.cvv,
+      },
+      ...(params.redirectUrl ? { redirectUrl: params.redirectUrl } : {}),
+    });
+    const result = await requestLenco('/collections/card', 'POST', { encryptedPayload });
+    const data = result.data || {};
+    const redirectUrl = data.status === '3ds-auth-required'
+      ? data.meta?.authorization?.redirect || ''
+      : '';
+
+    return {
+      gatewayReference: data.id || data.lencoReference || params.reference,
+      status: data.status || 'pending',
+      redirectUrl,
       raw: data,
     };
   }

@@ -5,14 +5,27 @@ export interface InitiatePaymentParams {
   amount: number;
   currency: string;
   phone: string;
+  paymentType?: 'mobile_money' | 'card';
   operator?: string;
   country?: string;
+  email?: string;
+  customer?: { firstName: string; lastName: string };
+  card?: { number: string; expiryMonth: string; expiryYear: string; cvv: string };
+  billing?: {
+    streetAddress?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+  };
+  redirectUrl?: string;
   narration?: string;
   metadata?: Record<string, unknown>;
 }
 export interface InitiatePaymentResult {
   gatewayReference: string;
   status: string;
+  redirectUrl?: string;
   raw: unknown;
 }
 export interface InitiatePayoutParams {

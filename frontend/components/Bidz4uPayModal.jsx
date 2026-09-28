@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
   Skeleton,
   Dialog,
@@ -11,6 +12,9 @@ import {
   DialogTitle,
   InputAdornment,
   MenuItem,
+  Stack,
+  Tabs,
+  Tab,
   TextField,
   Typography,
 } from '@mui/material';
@@ -32,20 +36,42 @@ export default function Bidz4uPayModal({
   withdrawalDetails = {},
   onSuccess,
 }) {
-  const { countryConfig } = useAuth();
-  const [phone, setPhone] = useState('');
-  const [phoneConfig, setPhoneConfig] = useState(null);
+  const { user, countryConfig } = useAuth();
+  const initialDigitLength = Number(countryConfig?.phoneNumberDigitLenth || 9);
+  const initialPhoneCode = String(phoneCode || countryConfig?.savedPhoneCode || '260').replace(/\D/g, '');
+  const initialAccountPhone = getPhoneDigits(user?.username, initialDigitLength)
+    || getPhoneDigits(user?.usrPhoneNormalized, initialDigitLength)
+    || getPhoneDigits(user?.phoneNumber, initialDigitLength);
+  const [phone, setPhone] = useState(initialAccountPhone);
+  const [phoneConfig, setPhoneConfig] = useState({
+    phoneCode: initialPhoneCode,
+    phoneNumberDigitLenth: initialDigitLength,
+    defaultPhone: initialAccountPhone,
+    defaultPhoneInternational: buildFullPhone(initialPhoneCode, initialAccountPhone, initialDigitLength),
+    countryCode: countryConfig?.savedCountryName?.toLowerCase() === 'zambia' ? 'ZM' : '',
+    verifiedPaymentNumbers: [],
+  });
   const [useAlternatePhone, setUseAlternatePhone] = useState(false);
   const [verifiedNumbers, setVerifiedNumbers] = useState([]);
   const [otp, setOtp] = useState('');
   const [otpOpen, setOtpOpen] = useState(false);
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpMessage, setOtpMessage] = useState('');
+  const [paymentType, setPaymentType] = useState('mobile_money');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardFirstName, setCardFirstName] = useState(user?.firstName || '');
+  const [cardLastName, setCardLastName] = useState(user?.lastName || '');
+  const [billingStreet, setBillingStreet] = useState('');
+  const [billingCity, setBillingCity] = useState('');
+  const [billingPostalCode, setBillingPostalCode] = useState('');
   const [operator, setOperator] = useState('');
   const [phase, setPhase] = useState('form');
   const [message, setMessage] = useState('');
   const pollRef = useRef(null);
   const timeoutRef = useRef(null);
+  const phoneTouchedRef = useRef(false);
 
   useEffect(() => () => {
     clearInterval(pollRef.current);
@@ -53,28 +79,55 @@ export default function Bidz4uPayModal({
   }, []);
 
   useEffect(() => {
+    const fallbackPhoneCode = String(phoneCode || countryConfig?.savedPhoneCode || '260').replace(/\D/g, '');
+    const fallbackDigitLength = Number(countryConfig?.phoneNumberDigitLenth || 9);
+    const accountPhone = getPhoneDigits(user?.username, fallbackDigitLength)
+      || getPhoneDigits(user?.usrPhoneNormalized, fallbackDigitLength)
+      || getPhoneDigits(user?.phoneNumber, fallbackDigitLength);
+    const fallbackConfig = {
+      phoneCode: fallbackPhoneCode,
+      phoneNumberDigitLenth: fallbackDigitLength,
+      defaultPhone: accountPhone,
+      defaultPhoneInternational: buildFullPhone(fallbackPhoneCode, accountPhone, fallbackDigitLength),
+      countryCode: countryConfig?.savedCountryName?.toLowerCase() === 'zambia' ? 'ZM' : '',
+      verifiedPaymentNumbers: [],
+    };
+
     if (!open) {
       clearInterval(pollRef.current);
       clearTimeout(timeoutRef.current);
       setPhase('form');
       setMessage('');
-      setPhone('');
-      setPhoneConfig(null);
+      setPhone(accountPhone);
+      setPhoneConfig(fallbackConfig);
       setUseAlternatePhone(false);
       setVerifiedNumbers([]);
       setOtp('');
       setOtpOpen(false);
       setOtpMessage('');
+      setPaymentType('mobile_money');
+      setCardNumber('');
+      setCardExpiry('');
+      setCardCvv('');
+      setCardFirstName(user?.firstName || '');
+      setCardLastName(user?.lastName || '');
+      setBillingStreet('');
+      setBillingCity('');
+      setBillingPostalCode('');
       setOperator('');
       return undefined;
     }
+
+    phoneTouchedRef.current = false;
+    setPhone(accountPhone);
+    setPhoneConfig(fallbackConfig);
 
     let cancelled = false;
     apiClient.get('/bidz4upay/payment-phone')
       .then((result) => {
         if (cancelled) return;
         setPhoneConfig(result);
-        setPhone(result?.defaultPhone || '');
+        if (!phoneTouchedRef.current) setPhone(result?.defaultPhone || accountPhone);
         setVerifiedNumbers(Array.isArray(result?.verifiedPaymentNumbers) ? result.verifiedPaymentNumbers : []);
       })
       .catch((error) => {
@@ -82,7 +135,7 @@ export default function Bidz4uPayModal({
         if (!cancelled) setMessage('Unable to load your account phone number. Close and try again.');
       });
     return () => { cancelled = true; };
-  }, [open]);
+  }, [open, user?.username, user?.usrPhoneNormalized, user?.phoneNumber, countryConfig?.savedPhoneCode, countryConfig?.phoneNumberDigitLenth, countryConfig?.savedCountryName, phoneCode]);
 
   const startPolling = (reference) => {
     setPhase('polling');
@@ -118,6 +171,15 @@ export default function Bidz4uPayModal({
   const accountPhone = phoneConfig?.defaultPhoneInternational || '';
   const phoneIsVerified = paymentPhone === accountPhone || verifiedNumbers.includes(paymentPhone);
   const usesMobileMoney = purpose !== 'withdraw' || withdrawalDetails.method !== 'bank_account';
+  const countryCode = String(phoneConfig?.countryCode || '').toUpperCase();
+  const localPhoneDigits = getPhoneDigits(phone, digitLength);
+
+  useEffect(() => {
+    if (countryCode !== 'ZM') return;
+    if (/^(97|77|57)/.test(localPhoneDigits)) setOperator('airtel');
+    else if (/^(96|76)/.test(localPhoneDigits)) setOperator('mtn');
+    else setOperator((current) => ['airtel', 'mtn'].includes(current) ? '' : current);
+  }, [countryCode, localPhoneDigits]);
 
   const requestPhoneVerification = async () => {
     try {
@@ -153,8 +215,19 @@ export default function Bidz4uPayModal({
 
   const submit = async () => {
     const isWithdrawal = purpose === 'withdraw';
+    const isCardPayment = !isWithdrawal && paymentType === 'card';
+    let verificationWindow = null;
     const walletCoversPayment = purpose === 'winnerpay' && Number(amount) <= 0;
-    if (usesMobileMoney && !walletCoversPayment && (
+    if (isCardPayment) {
+      const [month, year] = cardExpiry.split('/');
+      if (cardNumber.replace(/\D/g, '').length !== 16 || month?.length !== 2 || year?.length !== 2
+        || cardCvv.length < 3 || !cardFirstName.trim() || !cardLastName.trim()
+        || !billingStreet.trim() || !billingCity.trim() || !billingPostalCode.trim()) {
+        setMessage('Complete the card details and billing address before continuing.');
+        return;
+      }
+    }
+    if (!isCardPayment && usesMobileMoney && !walletCoversPayment && (
       getPhoneDigits(phone, digitLength).length !== digitLength || !(operator || withdrawalDetails.operator)
     )) {
       setMessage('Enter your phone number and mobile-money operator.');
@@ -166,15 +239,18 @@ export default function Bidz4uPayModal({
       return;
     }
     if (isWithdrawal && withdrawalDetails.method !== 'bank_account'
-      && (!getPhoneDigits(phone, digitLength).length || !withdrawalDetails.operator)) {
+      && (getPhoneDigits(phone, digitLength).length !== digitLength || !(operator || withdrawalDetails.operator))) {
       setMessage('Enter your withdrawal number and mobile-money operator.');
       return;
     }
-    if (usesMobileMoney && !walletCoversPayment && !phoneIsVerified) {
+    if (!isCardPayment && usesMobileMoney && !walletCoversPayment && !phoneIsVerified) {
       await requestPhoneVerification();
       return;
     }
     try {
+      if (isCardPayment) {
+        verificationWindow = window.open('about:blank', 'bidz4u-card-verification', 'width=600,height=700');
+      }
       setPhase('submitting');
       setMessage('');
       const result = isWithdrawal
@@ -188,25 +264,60 @@ export default function Bidz4uPayModal({
           purpose,
           amount,
           relatedEntityId,
-          phone: paymentPhone,
-          operator,
+          paymentType,
+          ...(isCardPayment ? {
+            customer: { firstName: cardFirstName.trim(), lastName: cardLastName.trim() },
+            card: {
+              number: cardNumber.replace(/\D/g, ''),
+              expiryMonth: cardExpiry.split('/')[0],
+              expiryYear: `20${cardExpiry.split('/')[1]}`,
+              cvv: cardCvv,
+            },
+            billing: {
+              streetAddress: billingStreet.trim(),
+              city: billingCity.trim(),
+              postalCode: billingPostalCode.trim(),
+              country: (phoneConfig?.countryCode || 'ZM').toUpperCase(),
+            },
+            redirectUrl: `${window.location.origin}/payment/callback`,
+          } : { phone: paymentPhone, operator }),
         });
       const payment = result?.data || result;
+      if (!payment?.reference) {
+        throw new Error('Payment was not started because no tracking reference was returned. Please try again.');
+      }
       if (payment?.paymentStatus === 'completed') {
+        if (verificationWindow && !verificationWindow.closed) verificationWindow.close();
         setPhase('success');
         setMessage('Payment completed successfully.');
         onSuccess?.(payment);
+      } else if (payment?.paymentStatus === 'failed' || payment?.immediateFailure) {
+        if (verificationWindow && !verificationWindow.closed) verificationWindow.close();
+        setPhase('error');
+        setMessage(payment.failureReason || 'Payment failed. Check your details and try again.');
       } else {
+        if (payment?.gatewayStatus === '3ds-auth-required' && payment?.redirectUrl) {
+          if (verificationWindow && !verificationWindow.closed) {
+            verificationWindow.location.href = payment.redirectUrl;
+          } else {
+            verificationWindow = window.open(payment.redirectUrl, 'bidz4u-card-verification', 'width=600,height=700');
+          }
+          verificationWindow = null;
+          setMessage('Complete the bank verification in the new window.');
+        } else if (verificationWindow && !verificationWindow.closed) {
+          verificationWindow.close();
+        }
         startPolling(payment?.reference);
       }
     } catch (error) {
+      if (verificationWindow && !verificationWindow.closed) verificationWindow.close();
       setPhase('error');
       setMessage(error.message || 'Unable to start payment.');
     }
   };
 
   return (
-    <Dialog open={open} onClose={phase === 'submitting' || phase === 'polling' ? undefined : onClose} fullWidth maxWidth="xs">
+    <Dialog open={open} onClose={otpOpen || phase === 'submitting' || phase === 'polling' ? undefined : onClose} fullWidth maxWidth="xs">
       <DialogTitle>
         {purpose === 'walletdeposit' ? 'Deposit to wallet' : purpose === 'withdraw' ? 'Confirm withdrawal' : 'Pay for this auction'}
       </DialogTitle>
@@ -215,19 +326,32 @@ export default function Bidz4uPayModal({
           Amount: {currency} {Number(amount || 0).toFixed(2)}
         </Typography>
         {purpose !== 'withdraw' && !(purpose === 'winnerpay' && Number(amount) <= 0) && (phase === 'form' || phase === 'submitting') && (
+          <Tabs
+            value={paymentType}
+            onChange={(_, value) => { setPaymentType(value); setMessage(''); }}
+            variant="fullWidth"
+            sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab value="mobile_money" label="Mobile Money" />
+            <Tab value="card" label="Card" />
+          </Tabs>
+        )}
+        {purpose !== 'withdraw' && paymentType === 'mobile_money' && !(purpose === 'winnerpay' && Number(amount) <= 0) && (phase === 'form' || phase === 'submitting') && (
           <>
             <TextField
               fullWidth
               type="tel"
               label="Mobile money number"
               value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              onChange={(event) => { phoneTouchedRef.current = true; setPhone(event.target.value); }}
               InputProps={{ startAdornment: <InputAdornment position="start">+{phoneCodeDigits}</InputAdornment> }}
               sx={{ mb: 1 }}
             />
             <Button size="small" onClick={() => {
+              phoneTouchedRef.current = true;
               setUseAlternatePhone((current) => !current);
               setPhone(useAlternatePhone ? (phoneConfig?.defaultPhone || '') : '');
+              setOperator('');
               setMessage('');
             }} sx={{ mb: 2, alignSelf: 'flex-start' }}>
               {useAlternatePhone ? 'Use account number' : 'Use a different number'}
@@ -238,6 +362,48 @@ export default function Bidz4uPayModal({
               <MenuItem value="zamtel">Zamtel</MenuItem>
             </TextField>
           </>
+        )}
+        {purpose !== 'withdraw' && paymentType === 'card' && (phase === 'form' || phase === 'submitting') && (
+          <Stack spacing={1.5} sx={{ maxHeight: '55vh', overflowY: 'auto', pr: 0.5 }}>
+            <TextField
+              fullWidth
+              label="Card number"
+              value={cardNumber}
+              onChange={(event) => setCardNumber(event.target.value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim())}
+              placeholder="1234 5678 9012 3456"
+              inputProps={{ inputMode: 'numeric', maxLength: 19, autoComplete: 'cc-number' }}
+            />
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+              <TextField
+                label="Expiry (MM/YY)"
+                value={cardExpiry}
+                onChange={(event) => {
+                  const digits = event.target.value.replace(/\D/g, '').slice(0, 4);
+                  setCardExpiry(digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits);
+                }}
+                placeholder="MM/YY"
+                inputProps={{ inputMode: 'numeric', maxLength: 5, autoComplete: 'cc-exp' }}
+              />
+              <TextField
+                label="CVV"
+                value={cardCvv}
+                onChange={(event) => setCardCvv(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                type="password"
+                inputProps={{ inputMode: 'numeric', maxLength: 4, autoComplete: 'cc-csc' }}
+              />
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+              <TextField label="First name" value={cardFirstName} onChange={(event) => setCardFirstName(event.target.value)} autoComplete="given-name" />
+              <TextField label="Last name" value={cardLastName} onChange={(event) => setCardLastName(event.target.value)} autoComplete="family-name" />
+            </Box>
+            <Typography variant="overline" color="text.secondary">Billing address</Typography>
+            <TextField label="Street address" value={billingStreet} onChange={(event) => setBillingStreet(event.target.value)} autoComplete="address-line1" />
+            <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 1.5 }}>
+              <TextField label="City" value={billingCity} onChange={(event) => setBillingCity(event.target.value)} autoComplete="address-level2" />
+              <TextField label="Postal code" value={billingPostalCode} onChange={(event) => setBillingPostalCode(event.target.value)} autoComplete="postal-code" />
+            </Box>
+            <Alert severity="info">Card details are encrypted before they are sent to Lenco.</Alert>
+          </Stack>
         )}
         {purpose === 'winnerpay' && Number(amount) <= 0 && (phase === 'form' || phase === 'submitting') && (
           <Alert severity="success">Your available wallet balance covers the remaining amount.</Alert>
@@ -252,13 +418,15 @@ export default function Bidz4uPayModal({
                 type="tel"
                 label="Mobile money number"
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
+                onChange={(event) => { phoneTouchedRef.current = true; setPhone(event.target.value); }}
                 InputProps={{ startAdornment: <InputAdornment position="start">+{phoneCodeDigits}</InputAdornment> }}
                 sx={{ mb: 1 }}
               />
               <Button size="small" onClick={() => {
+                phoneTouchedRef.current = true;
                 setUseAlternatePhone((current) => !current);
                 setPhone(useAlternatePhone ? (phoneConfig?.defaultPhone || '') : '');
+                setOperator('');
                 setMessage('');
               }} sx={{ mb: 2, alignSelf: 'flex-start' }}>
                 {useAlternatePhone ? 'Use account number' : 'Use a different number'}
@@ -272,7 +440,7 @@ export default function Bidz4uPayModal({
           )
         )}
         {phase === 'submitting' && <Skeleton variant="rounded" width="100%" height={48} sx={{ mt: 2 }} />}
-        {phase === 'polling' && <Alert severity="info">Approve the payment request on your phone.</Alert>}
+        {phase === 'polling' && <Alert severity="info">{message || (paymentType === 'card' ? 'Complete the bank verification to continue.' : 'Approve the payment request on your phone.')}</Alert>}
         {phase === 'success' && <Alert severity="success">{message}</Alert>}
         {phase === 'error' && <Alert severity="error">{message}</Alert>}
       </DialogContent>
@@ -285,7 +453,13 @@ export default function Bidz4uPayModal({
         )}
       </DialogActions>
 
-      <Dialog open={otpOpen} onClose={() => !otpBusy && setOtpOpen(false)} fullWidth maxWidth="xs">
+      <Dialog
+        open={otpOpen}
+        onClose={() => !otpBusy && setOtpOpen(false)}
+        fullWidth
+        maxWidth="xs"
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
+      >
         <DialogTitle>Verify payment number</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
