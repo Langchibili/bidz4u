@@ -11,6 +11,7 @@
     "actTitle": { "type": "string", "required": true },
     "actDescription": { "type": "text" },
     "actStartingPriceNative": { "type": "decimal", "required": true },
+    "noPrice": { "type": "boolean", "default": false },
     "actCurrentHighestPriceNative": { "type": "decimal", "default": 0.0 },
     "actNativeCurrencyCode": { "type": "string", "required": true },
     "actListingTimeStart": { "type": "datetime", "required": true },

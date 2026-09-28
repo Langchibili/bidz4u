@@ -32,6 +32,7 @@
       "type": "decimal",
       "default": 10
     },
+    "fallbackLowestBidAmount": { "type": "decimal", "default": 20 },
     "fallbackCommissionType": {
       "type": "enumeration",
       "enum": ["percentage", "flatrate"],

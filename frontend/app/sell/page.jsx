@@ -2117,15 +2117,16 @@
 'use client'
 
 import { Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Box, Typography, TextField, Button, InputAdornment, Alert,
-  MenuItem, Skeleton, Stack, Chip,
+  MenuItem, Skeleton, Stack, Chip, FormControlLabel, Switch,
 } from '@mui/material';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
 import { uploadFile } from '@/lib/api/uploads';
-import { STORAGE_KEYS } from '@/Constants';
+import { CUSTOM_THEME_COLORS, STORAGE_KEYS } from '@/Constants';
 import { getMediaUrl, formatCurrency, isDraftListing } from '@/Functions';
 import { useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import DocumentUploadCard from '@/components/shared/DocumentUploadCard';
@@ -2207,7 +2208,28 @@ function toDatetimeLocalValue(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function normalizeManualDateTime(value) {
+  return String(value || '').replace('T', ' ');
+}
+
+function parseManualDateTime(value) {
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute] = match.map(Number);
+  const date = new Date(year, month - 1, day, hour, minute);
+  if (
+    date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+    || date.getHours() !== hour
+    || date.getMinutes() !== minute
+  ) return null;
+
+  return date;
 }
 
 function SellPageInner() {
@@ -2231,9 +2253,12 @@ function SellPageInner() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [startingPrice, setStartingPrice] = useState('');
+  const [noPrice, setNoPrice] = useState(true);
   const [town, setTown] = useState('');
   const [selectedCountryId, setSelectedCountryId] = useState('');
   const [endDateTime, setEndDateTime] = useState('');
+  const [useDatePicker, setUseDatePicker] = useState(false);
+  const endDateTimeInputRef = useRef(null);
 
   // Minimum starting price for the currently selected country.
   const [minStartingPrice, setMinStartingPrice] = useState(null);
@@ -2267,8 +2292,8 @@ function SellPageInner() {
   );
 
   // 0, empty, or NaN all mean "no price set" — never send/treat 0 as a real price.
-  const priceIsUnset = !startingPrice || Number(startingPrice) === 0 || Number.isNaN(Number(startingPrice));
-  const priceBelowMinimum = !priceIsUnset && minStartingPrice != null && Number(startingPrice) < minStartingPrice;
+  const priceIsUnset = !noPrice && (!startingPrice || Number(startingPrice) === 0 || Number.isNaN(Number(startingPrice)));
+  const priceBelowMinimum = !noPrice && !priceIsUnset && minStartingPrice != null && Number(startingPrice) < minStartingPrice;
   const commissionAmount = commissionType === 'percentage'
     ? Number(startingPrice || 0) * Number(commission || 0) / 100
     : Number(commission || 0) * commissionRate;
@@ -2283,12 +2308,18 @@ function SellPageInner() {
     setItem(entity);
     setTitle(entity.actTitle && entity.actTitle !== 'Untitled' ? entity.actTitle : '');
     setDescription(entity.actDescription || '');
-    // 0 renders as an empty field — the "No price set" helper text below
-    // takes over from there rather than showing a literal "0".
-    setStartingPrice(entity.actStartingPriceNative ? String(entity.actStartingPriceNative) : '');
+    const listingHasNoPrice = entity.noPrice === true || Number(entity.actStartingPriceNative || 0) <= 0;
+    setNoPrice(listingHasNoPrice);
+    setStartingPrice(listingHasNoPrice ? '0' : entity.actStartingPriceNative ? String(entity.actStartingPriceNative) : '');
     setTown(entity.actTown || '');
     setSelectedCountryId(apiClient.resolveId(entity.itemOriginCountry, 'id') || entity.itemOriginCountry || '');
-    setEndDateTime(toDatetimeLocalValue(entity.actListingTimeEnd));
+    const savedEndTime = entity.actListingTimeEnd ? new Date(entity.actListingTimeEnd) : null;
+    const savedEndTimeIsInvalid = !savedEndTime || Number.isNaN(savedEndTime.getTime());
+    const savedDraftEndTimeHasPassed = entity.actIsDraft === true && savedEndTime && savedEndTime <= new Date();
+    const defaultEndTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    setEndDateTime(toDatetimeLocalValue(
+      savedEndTimeIsInvalid || savedDraftEndTimeHasPassed ? defaultEndTime : entity.actListingTimeEnd
+    ));
   }, []);
 
   // Fetch and load a specific existing draft by id, given its numeric or
@@ -2362,7 +2393,13 @@ function SellPageInner() {
     setPhase('creating');
     setErrorMsg('');
     try {
-      const defaultCountryId = ownCountryId || countryList[0]?.id;
+      let storedCountryId = null;
+      try {
+        storedCountryId = Number(JSON.parse(localStorage.getItem(STORAGE_KEYS.COUNTRY_CONFIG) || 'null')?.countryId) || null;
+      } catch {
+        storedCountryId = null;
+      }
+      const defaultCountryId = storedCountryId || ownCountryId || countryList[0]?.id;
       if (!defaultCountryId) {
         throw new Error(
           'No countries available to list from — GET /countries likely failed (check the browser console for the actual error; a 403 there usually means the "find" permission on Country isn\'t enabled for the Authenticated role).'
@@ -2379,6 +2416,7 @@ function SellPageInner() {
           // Always 0 — see the PRICING file-level note. Requires the
           // backend's actStartingPriceNative <= 0 check to allow 0 through.
           actStartingPriceNative: 0,
+          noPrice: true,
           actListingTimeStart: now.toISOString(),
           actListingTimeEnd: end.toISOString(),
           actAuctionStatus: 'scheduled',
@@ -2623,7 +2661,23 @@ function SellPageInner() {
     const num = Number(v);
     // Autosave 0 too (explicitly "no price set" is a valid saved state for
     // a draft) — only skip saving genuinely invalid/NaN input.
-    if (!Number.isNaN(num) && num >= 0) queueChange('actStartingPriceNative', num);
+    if (!Number.isNaN(num) && num >= 0) {
+      queueChange('actStartingPriceNative', num);
+      queueChange('actCurrentHighestPriceNative', num);
+    }
+  };
+  const handleNoPriceChange = (value) => {
+    setNoPrice(value);
+    queueChange('noPrice', value);
+    if (value) {
+      setStartingPrice('0');
+      queueChange('actStartingPriceNative', 0);
+      queueChange('actCurrentHighestPriceNative', 0);
+    } else {
+      setStartingPrice('');
+      queueChange('actStartingPriceNative', 0);
+      queueChange('actCurrentHighestPriceNative', 0);
+    }
   };
   const handleTownChange = (v) => { setTown(v); queueChange('actTown', v); };
   const handleCountryChange = (id) => {
@@ -2635,8 +2689,28 @@ function SellPageInner() {
     if (c?.currency?.currCode) queueChange('actNativeCurrencyCode', c.currency.currCode);
   };
   const handleEndDateTimeChange = (v) => {
-    setEndDateTime(v);
-    if (v) queueChange('actListingTimeEnd', new Date(v).toISOString());
+    const normalizedValue = normalizeManualDateTime(v);
+    setEndDateTime(normalizedValue);
+    const date = parseManualDateTime(normalizedValue);
+    if (date) queueChange('actListingTimeEnd', date.toISOString());
+  };
+  const handleDatePickerToggle = () => {
+    if (useDatePicker) {
+      setUseDatePicker(false);
+      return;
+    }
+
+    flushSync(() => setUseDatePicker(true));
+    const input = endDateTimeInputRef.current;
+    if (typeof input?.showPicker === 'function') {
+      try {
+        input.showPicker();
+      } catch {
+        input.focus();
+      }
+    } else {
+      input?.focus();
+    }
   };
 
   const numericItemId = apiClient.resolveId(item, 'id');
@@ -2661,14 +2735,18 @@ function SellPageInner() {
     setPublishSuccess('');
 
     if (!title.trim()) { setPublishError('Give your listing a title'); return; }
-    if (priceIsUnset) { setPublishError('Set a starting price before publishing — it\'s currently unset'); return; }
+    if (!noPrice && priceIsUnset) { setPublishError('Set a starting price before publishing — it\'s currently unset'); return; }
     if (priceBelowMinimum) {
       setPublishError(`Starting price must be at least ${minStartingPriceCurrency}${minStartingPrice}`);
       return;
     }
     if (!item?.actImages?.length) { setPublishError('Add at least one photo'); return; }
     if (towns.length > 0 && !town) { setPublishError("Select the town you're listing from"); return; }
-    if (!endDateTime || new Date(endDateTime) <= new Date()) { setPublishError('Pick an auction end time in the future'); return; }
+    const parsedEndDateTime = parseManualDateTime(endDateTime);
+    if (!parsedEndDateTime || parsedEndDateTime <= new Date()) {
+      setPublishError('Enter a valid future date and time as YYYY-MM-DD HH:mm');
+      return;
+    }
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     await flushChanges();
@@ -2679,8 +2757,11 @@ function SellPageInner() {
         data: {
           actIsDraft: false,
           actAuctionStatus: 'active',
+          noPrice,
+          actStartingPriceNative: noPrice ? 0 : Number(startingPrice),
+          actCurrentHighestPriceNative: noPrice ? 0 : Number(startingPrice),
           actListingTimeStart: new Date().toISOString(),
-          actListingTimeEnd: new Date(endDateTime).toISOString(),
+          actListingTimeEnd: parsedEndDateTime.toISOString(),
         },
       });
       localStorage.removeItem(STORAGE_KEYS.CURRENT_DRAFT_ID);
@@ -2698,9 +2779,14 @@ function SellPageInner() {
     setPublishError('');
     setPublishSuccess('');
 
-    if (priceIsUnset) { setPublishError('Set a starting price — it\'s currently unset'); return; }
+    if (!noPrice && priceIsUnset) { setPublishError('Set a starting price — it\'s currently unset'); return; }
     if (priceBelowMinimum) {
       setPublishError(`Starting price must be at least ${minStartingPriceCurrency}${minStartingPrice}`);
+      return;
+    }
+    const parsedEndDateTime = parseManualDateTime(endDateTime);
+    if (!parsedEndDateTime || parsedEndDateTime <= new Date()) {
+      setPublishError('Enter a valid future date and time as YYYY-MM-DD HH:mm');
       return;
     }
 
@@ -2838,6 +2924,17 @@ function SellPageInner() {
           ))}
         </TextField>
 
+        <FormControlLabel
+          control={(
+            <Switch
+              checked={!noPrice}
+              onChange={(event) => handleNoPriceChange(!event.target.checked)}
+              color="secondary"
+            />
+          )}
+          label={`Add price to your listing? ${noPrice ? 'No' : 'Yes'}`}
+        />
+
         <TextField
           select
           fullWidth
@@ -2856,24 +2953,26 @@ function SellPageInner() {
           ))}
         </TextField>
 
-        <TextField
-          fullWidth
-          type="number"
-          label="Starting price"
-          value={startingPrice}
-          onChange={(e) => handlePriceChange(e.target.value)}
-          InputProps={{ startAdornment: <InputAdornment position="start">{currencyLabel}</InputAdornment> }}
-          error={priceIsUnset || priceBelowMinimum}
-          helperText={
-            priceIsUnset
-              ? 'No price set — this listing cannot be published until you set one'
-              : priceBelowMinimum
-                ? `Below the minimum of ${minStartingPriceCurrency}${minStartingPrice}`
-                : selectedCountry
-                  ? `Priced in ${selectedCountry.countryName}'s currency (${selectedCountry.currency?.currCode || '—'})${minStartingPrice != null ? ` — minimum ${minStartingPriceCurrency}${minStartingPrice}` : ''}`
-                  : undefined
-          }
-        />
+        {!noPrice && (
+          <TextField
+            fullWidth
+            type="number"
+            label="Starting price"
+            value={startingPrice}
+            onChange={(e) => handlePriceChange(e.target.value)}
+            InputProps={{ startAdornment: <InputAdornment position="start">{currencyLabel}</InputAdornment> }}
+            error={priceIsUnset || priceBelowMinimum}
+            helperText={
+              priceIsUnset
+                ? 'Set a starting price to publish this listing'
+                : priceBelowMinimum
+                  ? `Below the minimum of ${minStartingPriceCurrency}${minStartingPrice}`
+                  : selectedCountry
+                    ? `Priced in ${selectedCountry.countryName}'s currency (${selectedCountry.currency?.currCode || '—'})${minStartingPrice != null ? ` — minimum ${minStartingPriceCurrency}${minStartingPrice}` : ''}`
+                    : undefined
+            }
+          />
+        )}
         {commission !== null && isCommissionRateReady && Number(startingPrice) > 0 && (
           <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5 }}>
             Site commission: {formatCurrency(commissionAmount, currencyLabel)}
@@ -2883,12 +2982,30 @@ function SellPageInner() {
 
         <TextField
           fullWidth
-          type="datetime-local"
+          type={useDatePicker ? 'datetime-local' : 'text'}
           label="Auction ends at"
-          value={endDateTime}
+          inputRef={endDateTimeInputRef}
+          value={useDatePicker ? normalizeManualDateTime(endDateTime).replace(' ', 'T') : normalizeManualDateTime(endDateTime)}
           onChange={(e) => handleEndDateTimeChange(e.target.value)}
-          InputLabelProps={{ shrink: true }}
+          placeholder={useDatePicker ? undefined : 'YYYY-MM-DD HH:mm'}
+          helperText={useDatePicker ? 'Choose a date and time.' : 'Enter manually, for example 2026-10-05 18:30.'}
+          InputLabelProps={useDatePicker ? { shrink: true } : undefined}
         />
+        <Button
+          variant="contained"
+          size="small"
+          onClick={handleDatePickerToggle}
+          sx={{
+            alignSelf: 'flex-start',
+            mt: -1.5,
+            bgcolor: CUSTOM_THEME_COLORS.ACCENT_GOLD,
+            color: CUSTOM_THEME_COLORS.PRIMARY_DEEP_BLUE,
+            fontWeight: 800,
+            '&:hover': { bgcolor: CUSTOM_THEME_COLORS.ACCENT_GOLD_DARK },
+          }}
+        >
+          {useDatePicker ? 'Enter date manually' : 'Use date/time picker instead'}
+        </Button>
 
         <DocumentUploadCard
           title="Item photo"

@@ -477,6 +477,8 @@ export interface ApiAdmnSettingAdmnSetting extends Struct.SingleTypeSchema {
       Schema.Attribute.DefaultTo<1440>;
     fallbackForfeitureSplitSellerPercentage: Schema.Attribute.Decimal &
       Schema.Attribute.DefaultTo<50>;
+    fallbackLowestBidAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.DefaultTo<20>;
     fallbackMaximumTimeBeforeBiddingClosesInMins: Schema.Attribute.Integer &
       Schema.Attribute.DefaultTo<1440>;
     fallbackMaxSimultaneousBidsPerUser: Schema.Attribute.Integer &
@@ -623,6 +625,7 @@ export interface ApiAuctionItemAuctionItem extends Struct.CollectionTypeSchema {
       'api::auction-item.auction-item'
     > &
       Schema.Attribute.Private;
+    noPrice: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     publishedAt: Schema.Attribute.DateTime;
     seller: Schema.Attribute.Relation<
       'manyToOne',
@@ -826,6 +829,7 @@ export interface ApiCountryCountry extends Struct.CollectionTypeSchema {
       'api::country.country'
     > &
       Schema.Attribute.Private;
+    lowestBidAmount: Schema.Attribute.Decimal;
     maximumTimeBeforeBiddingClosesInMins: Schema.Attribute.Integer;
     maxSimultaneousBidsPerUser: Schema.Attribute.Integer;
     minimumAmountBeforeBid: Schema.Attribute.Decimal;

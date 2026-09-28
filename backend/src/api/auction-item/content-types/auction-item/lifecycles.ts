@@ -6,6 +6,11 @@ export default {
   async beforeCreate(event: any) {
     const { data } = event.params;
 
+    if (data?.noPrice === true) {
+      data.actStartingPriceNative = 0;
+      data.actCurrentHighestPriceNative = 0;
+    }
+
     // Only guard draft creation — real (non-draft) creates are unaffected.
     if (data?.actIsDraft !== true) return;
 
@@ -30,6 +35,14 @@ export default {
           `Finish or discard it before starting a new one.`,
         { existingDraftId: latest.documentId, existingDraftNumericId: latest.id }
       );
+    }
+  },
+
+  async beforeUpdate(event: any) {
+    const { data } = event.params;
+    if (data?.noPrice === true) {
+      data.actStartingPriceNative = 0;
+      data.actCurrentHighestPriceNative = 0;
     }
   },
 };

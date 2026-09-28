@@ -56,6 +56,7 @@
       "type": "decimal",
       "default": 10
     },
+    "lowestBidAmount": { "type": "decimal" },
     "commissionType": {
       "type": "enumeration",
       "enum": ["percentage", "flatrate"]

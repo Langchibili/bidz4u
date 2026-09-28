@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Box,
@@ -27,6 +28,7 @@ import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
 import { formatCurrency, getCurrencySymbol, isDraftListing } from '@/Functions';
 import BottomNav from '@/components/BottomNav';
 import ConfirmDeliveryModal from '@/components/ConfirmDeliveryModal';
+import Bidz4uPayModal from '@/components/Bidz4uPayModal';
 import { CUSTOM_THEME_COLORS, STORAGE_KEYS } from '@/Constants';
 
 export default function AuctionDetailPage() {
@@ -36,7 +38,7 @@ export default function AuctionDetailPage() {
   // route (GET /auction-items/:id), which resolves :id as documentId.
   const { id: routeDocumentId } = useParams();
   const router = useRouter();
-  const { user, isAuthenticated, countryConfig, effectiveSettings } = useAuth();
+  const { user, isAuthenticated, countryConfig, effectiveSettings, refreshUser, hydrated } = useAuth();
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,9 @@ export default function AuctionDetailPage() {
   const [bidAmount, setBidAmount] = useState('');
   const [placingBid, setPlacingBid] = useState(false);
   const [bidError, setBidError] = useState('');
+  const [depositAmount, setDepositAmount] = useState(0);
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [lowestBidSetting, setLowestBidSetting] = useState({ amount: 20, currency: '' });
   const [flash, setFlash] = useState(false);
   const [bidCount, setBidCount] = useState(null);
   const [bidCountFailed, setBidCountFailed] = useState(false);
@@ -52,6 +57,8 @@ export default function AuctionDetailPage() {
   const [acceptError, setAcceptError] = useState('');
   const [isWinner, setIsWinner] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [pendingWinnerPayment, setPendingWinnerPayment] = useState(null);
+  const [pendingWinnerCheck, setPendingWinnerCheck] = useState('checking');
 
   // What the VIEWER types into the bid box is in THEIR OWN currency
   // (bidAmountLocal — bid.place converts it server-side into the auction's
@@ -76,6 +83,31 @@ export default function AuctionDetailPage() {
   // UIDTYPE_AUDIT.md for the full endpoint-by-endpoint breakdown.
   const numericItemId = apiClient.resolveId(item, 'id');
   const currentUserId = apiClient.resolveId(user, 'id');
+
+  useEffect(() => {
+    if (!hydrated) return undefined;
+    if (!currentUserId) {
+      setPendingWinnerPayment(null);
+      setPendingWinnerCheck('clear');
+      return undefined;
+    }
+
+    let cancelled = false;
+    setPendingWinnerCheck('checking');
+    apiClient.get('/auction-items/me/pending-payment')
+      .then((response) => {
+        if (cancelled) return;
+        const result = response?.data || response;
+        setPendingWinnerPayment(result?.auction || null);
+        setPendingWinnerCheck(result?.pendingPayment ? 'blocked' : 'clear');
+      })
+      .catch((checkError) => {
+        console.error('Failed to check pending winner payment', checkError);
+        if (!cancelled) setPendingWinnerCheck('error');
+      });
+
+    return () => { cancelled = true; };
+  }, [hydrated, currentUserId]);
 
   const live = useSocket(numericItemId, {
     userId: apiClient.resolveId(user, 'id'),
@@ -196,12 +228,38 @@ export default function AuctionDetailPage() {
     viewerCurrencyCode
   );
   const displayedPrice = Number(nativePrice) * rate;
+  const { rate: lowestBidRate, isReady: isLowestBidReady } = useViewerCurrencyRate(
+    lowestBidSetting.currency || item?.actNativeCurrencyCode,
+    viewerCurrencyCode
+  );
   const displayedCurrencySymbol = isDifferentCountry ? viewerCurrencyLabel : (item?.actNativeCurrencySymbol || viewerCurrencyLabel);
   const wasCurrencyConverted = isDifferentCountry && !!nativeCurrencyCode && !!viewerCurrencyCode && nativeCurrencyCode !== viewerCurrencyCode;
   const locationLabel = item?.actTown && isDifferentCountry
     ? `${item.actTown}, ${itemCountryName}`
     : item?.actTown || (isDifferentCountry ? itemCountryName : '');
   const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    const itemCountryId = item?.itemOriginCountry?.id;
+    if (!itemCountryId) return undefined;
+    let cancelled = false;
+    apiClient.get(`/countries/${itemCountryId}/effective-settings`)
+      .then((response) => {
+        if (cancelled) return;
+        const settings = response?.settings || response;
+        setLowestBidSetting({
+          amount: Number(settings?.lowestBidAmount ?? 20),
+          currency: settings?._lowestBidAmountCurrency || item?.actNativeCurrencyCode || '',
+        });
+      })
+      .catch((settingsError) => {
+        console.error('Failed to load minimum bid setting', settingsError);
+        if (!cancelled) {
+          setLowestBidSetting({ amount: 20, currency: item?.actNativeCurrencyCode || '' });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [item?.itemOriginCountry?.id, item?.actNativeCurrencyCode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +295,7 @@ const handleAcceptPrice = async () => {
 
   const handlePlaceBid = async () => {
     setBidError('');
+    setDepositAmount(0);
     if (!isAuthenticated()) {
       router.push(`/login?redirect=/auction/${routeDocumentId}`);
       return;
@@ -266,6 +325,8 @@ const handleAcceptPrice = async () => {
       setBidAmount('');
     } catch (err) {
       setBidError(err.message || 'Failed to place bid');
+      const details = err.payload?.error?.details;
+      if (Number(details?.depositAmount) > 0) setDepositAmount(Number(details.depositAmount));
     } finally {
       setPlacingBid(false);
     }
@@ -380,7 +441,9 @@ const handleAcceptPrice = async () => {
                 fontSize: 'clamp(1.25rem, 9cqw, 3rem)',
               }}
             >
-              {isPriceReady ? formatCurrency(displayedPrice, displayedCurrencySymbol) : '...'}
+              {item.noPrice && Number(nativePrice) <= 0
+                ? 'No price set'
+                : isPriceReady ? formatCurrency(displayedPrice, displayedCurrencySymbol) : '...'}
             </Typography>
           </motion.div>
         </AnimatePresence>
@@ -392,6 +455,12 @@ const handleAcceptPrice = async () => {
               ? 'Loading bids...'
               : `${bidCount} bid${bidCount === 1 ? '' : 's'}`}
         </Typography>
+
+        {item.noPrice && isLowestBidReady && (
+          <Alert severity="info" sx={{ mt: 1.5 }}>
+            This listing has no price. You can bid any amount from {formatCurrency(lowestBidSetting.amount * lowestBidRate, viewerCurrencyLabel)}.
+          </Alert>
+        )}
 
         {isOwner && isActive && bidCount > 0 && (
           <Button
@@ -424,6 +493,29 @@ const handleAcceptPrice = async () => {
       </Box>
 
       {isActive && !timer.isExpired && !isOwner && (
+        pendingWinnerCheck === 'checking' ? (
+          <Alert severity="info" sx={{ mb: 2 }}>Checking for unpaid winning auctions...</Alert>
+        ) : pendingWinnerCheck === 'blocked' ? (
+          <Alert
+            severity="warning"
+            sx={{ mb: 2 }}
+            action={pendingWinnerPayment?.documentId ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => router.push(`/auction/${pendingWinnerPayment.documentId}/checkout`)}
+              >
+                Complete payment
+              </Button>
+            ) : undefined}
+          >
+            You have an auction awaiting payment. Complete payment before bidding on another listing.
+          </Alert>
+        ) : pendingWinnerCheck === 'error' ? (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            We couldn&apos;t check your pending auction payments. Refresh this page before bidding.
+          </Alert>
+        ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <TextField
             fullWidth
@@ -438,9 +530,22 @@ const handleAcceptPrice = async () => {
           />
 
           {bidError && (
-            <Alert severity="error" sx={{ borderRadius: 3 }}>
-              {bidError}
-            </Alert>
+            <>
+              <Alert severity="error" sx={{ borderRadius: 3 }}>
+                {bidError}
+              </Alert>
+              {depositAmount > 0 && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="secondary"
+                  onClick={() => setDepositOpen(true)}
+                  sx={{ height: 52, fontWeight: 700 }}
+                >
+                  Deposit {formatCurrency(depositAmount, viewerCurrencyLabel)} now
+                </Button>
+              )}
+            </>
           )}
 
           <Button
@@ -455,6 +560,7 @@ const handleAcceptPrice = async () => {
             {placingBid ? <Skeleton variant="text" width={100} sx={{ bgcolor: 'rgba(255,255,255,0.35)' }} /> : 'Place Bid'}
           </Button>
         </Box>
+        )
       )}
 
       {!isActive && (
@@ -490,6 +596,20 @@ const handleAcceptPrice = async () => {
         item={item}
         onClose={() => setDeliveryOpen(false)}
         onConfirmed={() => setItem((current) => ({ ...current, actEscrowReleased: true, actBuyerConfirmedDelivery: true }))}
+      />
+
+      <Bidz4uPayModal
+        open={depositOpen}
+        onClose={() => setDepositOpen(false)}
+        purpose="walletdeposit"
+        amount={depositAmount}
+        currency={viewerCurrencyLabel}
+        phoneCode={countryConfig?.savedPhoneCode}
+        onSuccess={() => {
+          setDepositOpen(false);
+          setDepositAmount(0);
+          refreshUser().catch((refreshError) => console.error('Failed to refresh wallet after deposit', refreshError));
+        }}
       />
 
       <Dialog open={acceptDialogOpen} onClose={() => !acceptingPrice && setAcceptDialogOpen(false)}>

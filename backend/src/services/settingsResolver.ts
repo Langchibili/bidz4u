@@ -16,6 +16,7 @@ const FIELD_MAP: Record<string, string> = {
   minimumAmountBeforeBidType: 'fallbackMinimumAmountBeforeBidType',
   minimumAmountBeforeBid: 'fallbackMinimumAmountBeforeBid',
   minimumAuctionStartingPrice: 'fallbackMinimumAuctionStartingPrice',
+  lowestBidAmount: 'fallbackLowestBidAmount',
   commissionType: 'fallbackCommissionType',
   commission: 'fallbackCommission',
   timeToAllowBidWinnerToPayInMins: 'fallbackTimeToAllowBidWinnerToPayInMins',
@@ -67,6 +68,9 @@ export async function resolveSettingsForCountry(strapi: any, countryId?: number 
   // Same rule for minimumAuctionStartingPrice.
   const minimumStartingPriceCameFromCountry = country?.minimumAuctionStartingPrice !== null && country?.minimumAuctionStartingPrice !== undefined;
   resolved._minimumAuctionStartingPriceCurrency = minimumStartingPriceCameFromCountry ? userCurrency : settingsBaseCurrency;
+
+  const lowestBidAmountCameFromCountry = country?.lowestBidAmount !== null && country?.lowestBidAmount !== undefined;
+  resolved._lowestBidAmountCurrency = lowestBidAmountCameFromCountry ? userCurrency : settingsBaseCurrency;
 
   const commissionCameFromCountry = country?.commission !== null && country?.commission !== undefined;
   resolved._commissionCurrency = commissionCameFromCountry ? userCurrency : settingsBaseCurrency;

@@ -8,6 +8,12 @@ export default {
     },
     {
       method: "GET",
+      path: "/auction-items/me/pending-payment",
+      handler: "auction-item.pendingWinnerPayment",
+      config: { auth: {} },
+    },
+    {
+      method: "GET",
       path: "/auction-items/:id/lightweight-status",
       handler: "auction-item.lightweightStatus",
       config: { auth: false },

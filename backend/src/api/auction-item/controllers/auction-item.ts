@@ -258,12 +258,13 @@ export default factories.createCoreController('api::auction-item.auction-item', 
       const userId = ctx.state.user?.id;
       if (!userId) return ctx.unauthorized('Login required');
 
-      const { itemOriginCountry, actStartingPriceNative, actIsDraft, ...rest } = ctx.request.body.data || ctx.request.body;
+      const { itemOriginCountry, actStartingPriceNative, actIsDraft, noPrice, ...rest } = ctx.request.body.data || ctx.request.body;
       if (!itemOriginCountry) return ctx.badRequest('itemOriginCountry is required');
 
       const isDraft = actIsDraft === true;
+      const listingHasNoPrice = noPrice === true;
 
-      if (!isDraft) {
+      if (!isDraft && !listingHasNoPrice) {
         if (!actStartingPriceNative || actStartingPriceNative <= 0) {
           return ctx.badRequest('actStartingPriceNative must be a positive number');
         }
@@ -277,9 +278,9 @@ export default factories.createCoreController('api::auction-item.auction-item', 
       if (!country.currency?.currCode) return ctx.badRequest('Selected country has no currency configured');
 
       const auctionCurrency = country.currency.currCode;
-      let startingPriceToSave = actStartingPriceNative ?? 0;
+      let startingPriceToSave = listingHasNoPrice ? 0 : actStartingPriceNative ?? 0;
 
-      if (!isDraft) {
+      if (!isDraft && !listingHasNoPrice) {
         const { resolveSettingsForCountry } = await import('../../../services/settingsResolver');
         const { convertAmount } = await import('../../../services/currencyConversion');
 
@@ -310,6 +311,7 @@ export default factories.createCoreController('api::auction-item.auction-item', 
           ...rest,
           itemOriginCountry,
           actIsDraft: isDraft,
+          noPrice: listingHasNoPrice,
           actStartingPriceNative: startingPriceToSave,
           actCurrentHighestPriceNative: startingPriceToSave,
           actNativeCurrencyCode: auctionCurrency,
@@ -404,6 +406,27 @@ export default factories.createCoreController('api::auction-item.auction-item', 
     } catch (error) {
       console.error('Error fetching user listings:', error);
       ctx.internalServerError('Failed to load user listings');
+    }
+  },
+
+  async pendingWinnerPayment(ctx) {
+    try {
+      const userId = ctx.state.user?.id;
+      if (!userId) return ctx.unauthorized('Login required');
+
+      const item = await strapi.db.query('api::auction-item.auction-item').findOne({
+        where: { currentWinningBuyer: userId, actAuctionStatus: 'payment_pending' },
+        select: ['id', 'documentId', 'actTitle'],
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      ctx.send({
+        pendingPayment: Boolean(item),
+        auction: item ? { id: item.id, documentId: item.documentId, title: item.actTitle } : null,
+      });
+    } catch (error) {
+      strapi.log.error('Error checking pending winner payment:', error);
+      ctx.internalServerError('Failed to check pending auction payments');
     }
   },
 

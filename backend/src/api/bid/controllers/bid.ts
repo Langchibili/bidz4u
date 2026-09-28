@@ -192,6 +192,14 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
       if (!user) return ctx.unauthorized('Login required');
       if (!auctionItemId || !bidAmountLocal) return ctx.badRequest('auctionItemId and bidAmountLocal are required');
 
+      const pendingWinnerAuction = await strapi.db.query('api::auction-item.auction-item').findOne({
+        where: { currentWinningBuyer: user.id, actAuctionStatus: 'payment_pending' },
+        select: ['id'],
+      });
+      if (pendingWinnerAuction) {
+        return ctx.badRequest('You have an auction awaiting payment. Complete payment before placing another bid.');
+      }
+
       const { resolveSettingsForCountry } = await import('../../../services/settingsResolver');
       const { convertAmount } = await import('../../../services/currencyConversion');
       const socketService = (await import('../../../services/socketService')).default;
@@ -199,7 +207,7 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
 
       const auctionItem = await strapi.db.query('api::auction-item.auction-item').findOne({
         where: { id: auctionItemId },
-        populate: { seller: true },
+        populate: { seller: true, itemOriginCountry: true },
       });
       if (!auctionItem) return ctx.notFound('Auction item not found');
       if (auctionItem.seller?.id === user.id) return ctx.forbidden('You cannot bid on your own listing');
@@ -261,8 +269,33 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
         return ctx.badRequest('Currency conversion is temporarily unavailable. Please try again shortly.');
       }
 
-      if (bidAmountNative <= Number(auctionItem.actCurrentHighestPriceNative)) {
-        const highestBidDisplay = await formatAmountForBidder(Number(auctionItem.actCurrentHighestPriceNative));
+      const currentHighestNative = Number(auctionItem.actCurrentHighestPriceNative || 0);
+      if (auctionItem.noPrice === true) {
+        const itemSettings = await resolveSettingsForCountry(strapi, auctionItem.itemOriginCountry?.id);
+        const lowestBidCurrency = String(itemSettings._lowestBidAmountCurrency || auctionCurrency).toUpperCase();
+        let lowestBidNative: number;
+        try {
+          lowestBidNative = lowestBidCurrency === String(auctionCurrency).toUpperCase()
+            ? Number(itemSettings.lowestBidAmount ?? 20)
+            : await convertAmount(Number(itemSettings.lowestBidAmount ?? 20), lowestBidCurrency, auctionCurrency);
+        } catch (conversionErr: any) {
+          strapi.log.error('[bid.place] Currency conversion failed (minimum bid calculation):', conversionErr.message);
+          return ctx.badRequest('Currency conversion is temporarily unavailable. Please try again shortly.');
+        }
+        if (bidAmountNative < lowestBidNative) {
+          const lowestBidDisplay = await formatAmountForBidder(lowestBidNative);
+          return ctx.badRequest(`This listing has no price. The minimum bid is ${lowestBidDisplay}`);
+        }
+      } else {
+        const startingPriceNative = Number(auctionItem.actStartingPriceNative || 0);
+        if (bidAmountNative < startingPriceNative) {
+          const startingPriceDisplay = await formatAmountForBidder(startingPriceNative);
+          return ctx.badRequest(`Bid must be at least the starting price of ${startingPriceDisplay}`);
+        }
+      }
+
+      if (bidAmountNative <= currentHighestNative) {
+        const highestBidDisplay = await formatAmountForBidder(currentHighestNative);
         return ctx.badRequest(`Bid must exceed the current highest bid of ${highestBidDisplay}`);
       }
 
@@ -275,7 +308,9 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
       if (!wallet) return ctx.badRequest('Wallet not found');
       const walletCurrency = String(wallet.currency?.currCode || userCurrency).toUpperCase();
       try {
-        const basePrice = Number(auctionItem.actStartingPriceNative);
+        const basePrice = auctionItem.noPrice === true
+          ? bidAmountNative
+          : Number(auctionItem.actStartingPriceNative);
 
         if (settings.minimumAmountBeforeBidType === 'percentage') {
           // Percentage of the (already native-currency) starting price — no conversion needed ever.
@@ -300,7 +335,17 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
       const walletAvailable = Number(wallet.wltAvailableBalance || 0);
       if (walletAvailable + ownPreviousDeposit < minRequiredWallet) {
         const minRequiredDisplay = await formatAmountForBidder(minRequiredNative);
-        return ctx.badRequest(`A secured deposit of ${minRequiredDisplay} is required to place this bid.`);
+        const depositShortfallWallet = minRequiredWallet - walletAvailable - ownPreviousDeposit;
+        const depositShortfallUserCurrency = walletCurrency === String(userCurrency).toUpperCase()
+          ? depositShortfallWallet
+          : await convertAmount(depositShortfallWallet, walletCurrency, userCurrency);
+        return ctx.badRequest(
+          `A secured deposit of ${minRequiredDisplay} is required to place this bid.`,
+          {
+            depositAmount: Math.ceil(depositShortfallUserCurrency * 100) / 100,
+            currencyCode: String(userCurrency).toUpperCase(),
+          }
+        );
       }
 
       let bid: any;
