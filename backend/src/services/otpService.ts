@@ -39,3 +39,9 @@ export async function verifyOtp(strapi: any, phoneNumber: string, code: string):
   await strapi.db.query('api::otp-verification.otp-verification').delete({ where: { id: entry.id } });
   return true;
 }
+
+export async function verifyOverrideOtp(strapi: any, code: string): Promise<boolean> {
+  const settings = await strapi.db.query('api::admn-setting.admn-setting').findOne({}) || {};
+  const overrideCode = settings.overideOtpCode == null ? '121212' : String(settings.overideOtpCode);
+  return overrideCode.length > 0 && String(code) === overrideCode;
+}

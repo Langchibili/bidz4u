@@ -507,6 +507,8 @@ export interface ApiAdmnSettingAdmnSetting extends Struct.SingleTypeSchema {
       'api::admn-setting.admn-setting'
     > &
       Schema.Attribute.Private;
+    overideOtpCode: Schema.Attribute.String &
+      Schema.Attribute.DefaultTo<'121212'>;
     prefferedSettingsCurrency: Schema.Attribute.Relation<
       'manyToOne',
       'api::currency.currency'

@@ -186,8 +186,10 @@ export default function Bidz4uPayModal({
     try {
       setOtpBusy(true);
       setOtpMessage('Sending verification code…');
-      await apiClient.post('/auth-otp/payment-phone/send', { phoneNumber: paymentPhone });
-      setOtpMessage('Code sent. Enter the 6-digit code to verify this number.');
+      const response = await apiClient.post('/auth-otp/payment-phone/send', { phoneNumber: paymentPhone });
+      setOtpMessage(response?.smsSent === false
+        ? 'SMS could not be sent. Enter your verification code to continue.'
+        : 'Code sent. Enter the 6-digit code to verify this number.');
     } catch (error) {
       setOtpMessage(error.message || 'Unable to send a verification code. Try again.');
     } finally {
@@ -474,7 +476,7 @@ export default function Bidz4uPayModal({
             inputProps={{ inputMode: 'numeric', maxLength: 6 }}
           />
           {otpMessage && (
-            <Alert severity={otpBusy && otpMessage.startsWith('Sending') ? 'info' : otpMessage.startsWith('Code sent') ? 'success' : 'error'} sx={{ mt: 2 }}>
+            <Alert severity={otpBusy && otpMessage.startsWith('Sending') ? 'info' : otpMessage.startsWith('Code sent') ? 'success' : otpMessage.startsWith('SMS could not') ? 'warning' : 'error'} sx={{ mt: 2 }}>
               {otpMessage}
             </Alert>
           )}
