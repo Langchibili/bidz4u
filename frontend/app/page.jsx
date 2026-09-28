@@ -14,6 +14,7 @@ export default function Home() {
   const router = useRouter();
   const { isAuthenticated, hydrated, user } = useAuth();
   const [items, setItems] = useState([]);
+  const [pinnedItems, setPinnedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [search, setSearch] = useState('');
@@ -39,51 +40,72 @@ export default function Home() {
     }
 
     let cancelled = false;
-    // AuctionCard fetches each bid count from /bids using a relation filter, so
-    // the feed does not load the full bid collection for every item.
-    //
-    // filters[actIsDraft][$eq]=false is explicit defense-in-depth: draft
-    // listings default to actAuctionStatus='scheduled' (not 'active'), so
-    // the actAuctionStatus filter alone already excludes them today — but a
-    // future status change to a draft (e.g. via a backend bug) shouldn't be
-    // the only thing keeping drafts off the public feed.
-    const params = new URLSearchParams({
-      'filters[actAuctionStatus][$eq]': 'active',
-      'filters[actIsDraft][$eq]': 'false',
-      'populate[actImages][fields][0]': 'url',
-      'populate[actImages][fields][1]': 'formats',
-      'populate[itemOriginCountry][fields][0]': 'id',
-      'populate[itemOriginCountry][fields][1]': 'countryName',
-      'populate[itemOriginCountry][fields][2]': 'countryCode',
-      'populate[itemOriginCountry][populate][currency][fields][0]': 'currCode',
-      'pagination[page]': String(page),
-      'pagination[pageSize]': '10',
-      sort: 'createdAt:desc',
-    });
-    if (search) {
-      params.set('filters[$or][0][actTitle][$containsi]', search);
-      params.set('filters[$or][1][actDescription][$containsi]', search);
-    }
-
     setLoading(true);
-    apiClient
-      .get(`/auction-items?${params.toString()}`)
-      .then((res) => {
-        if (!cancelled) {
-          setItems(Array.isArray(res?.data) ? res.data : []);
-          setPageCount(Math.max(1, Number(res?.meta?.pagination?.pageCount) || 1));
-        }
-      })
-      .catch((err) => {
+    const loadAuctions = async () => {
+      let userPinnedItems = [];
+      try {
+        const bidsResponse = await apiClient.get('/bids/me');
+        const pinnedById = new Map();
+        (bidsResponse?.bids || []).forEach((bid) => {
+          const auction = bid.auctionItem;
+          if (!auction || auction.actAuctionStatus !== 'active' || auction.actIsDraft) return;
+          if (search && !`${auction.actTitle || ''} ${auction.actDescription || ''}`.toLowerCase().includes(search.toLowerCase())) return;
+          const numericId = apiClient.resolveId(auction, 'id');
+          if (numericId == null) return;
+          const id = String(numericId);
+          if (!pinnedById.has(id)) pinnedById.set(id, auction);
+        });
+        userPinnedItems = Array.from(pinnedById.values());
+      } catch (err) {
+        console.error('Failed to load auctions the user has bid on', err);
+      }
+      if (cancelled) return;
+      setPinnedItems(userPinnedItems);
+
+      const pinnedPageItems = userPinnedItems.slice((page - 1) * 10, page * 10);
+      const regularSlots = 10 - pinnedPageItems.length;
+      const regularStart = Math.max(0, (page - 1) * 10 - userPinnedItems.length);
+      const params = new URLSearchParams({
+        'filters[actAuctionStatus][$eq]': 'active',
+        'filters[actIsDraft][$eq]': 'false',
+        'populate[actImages][fields][0]': 'url',
+        'populate[actImages][fields][1]': 'formats',
+        'populate[itemOriginCountry][fields][0]': 'id',
+        'populate[itemOriginCountry][fields][1]': 'countryName',
+        'populate[itemOriginCountry][fields][2]': 'countryCode',
+        'populate[itemOriginCountry][populate][currency][fields][0]': 'currCode',
+        'pagination[start]': String(regularStart),
+        'pagination[limit]': String(Math.max(1, regularSlots)),
+        'pagination[withCount]': 'true',
+        sort: 'createdAt:desc',
+      });
+      userPinnedItems.forEach((item, index) => {
+        params.set(`filters[id][$notIn][${index}]`, String(apiClient.resolveId(item, 'id')));
+      });
+      if (search) {
+        params.set('filters[$or][0][actTitle][$containsi]', search);
+        params.set('filters[$or][1][actDescription][$containsi]', search);
+      }
+
+      try {
+        const response = await apiClient.get(`/auction-items?${params.toString()}`);
+        if (cancelled) return;
+        const regularItems = Array.isArray(response?.data) ? response.data : [];
+        setItems(regularItems.slice(0, regularSlots));
+        const regularTotal = Number(response?.meta?.pagination?.total) || 0;
+        setPageCount(Math.max(1, Math.ceil((userPinnedItems.length + regularTotal) / 10)));
+      } catch (err) {
         console.error('Failed to load auctions', err);
         if (!cancelled) {
           setItems([]);
           setPageCount(1);
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+
+    loadAuctions();
 
     return () => { cancelled = true; };
   }, [hydrated, isAuthenticated, user?.id, page, search]);
@@ -137,7 +159,7 @@ export default function Home() {
         </Stack>
       ) : (
         <Stack spacing={1.5}>
-          {items.map((item) => (
+          {[...pinnedItems.slice((page - 1) * 10, page * 10), ...items].map((item) => (
             <AuctionCard
               key={apiClient.resolveId(item)}
               item={item}

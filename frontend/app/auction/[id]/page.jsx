@@ -44,6 +44,7 @@ export default function AuctionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [bidAmount, setBidAmount] = useState('');
+  const [bidConfirmOpen, setBidConfirmOpen] = useState(false);
   const [placingBid, setPlacingBid] = useState(false);
   const [bidError, setBidError] = useState('');
   const [depositAmount, setDepositAmount] = useState(0);
@@ -293,7 +294,22 @@ const handleAcceptPrice = async () => {
     }
   };
 
-  const handlePlaceBid = async () => {
+  const handlePlaceBid = () => {
+    setBidError('');
+    if (!isAuthenticated()) {
+      router.push(`/login?redirect=/auction/${routeDocumentId}`);
+      return;
+    }
+    const amount = parseFloat(bidAmount);
+    if (!amount || amount <= 0) {
+      setBidError('Enter a valid bid amount');
+      return;
+    }
+    setBidConfirmOpen(true);
+  };
+
+  const confirmPlaceBid = async () => {
+    setBidConfirmOpen(false);
     setBidError('');
     setDepositAmount(0);
     if (!isAuthenticated()) {
@@ -322,6 +338,7 @@ const handleAcceptPrice = async () => {
         { auctionItemId: apiClient.resolveId(item, 'id'), bidAmountLocal: amount },
         'id'
       );
+      setBidConfirmOpen(false);
       setBidAmount('');
     } catch (err) {
       setBidError(err.message || 'Failed to place bid');
@@ -456,7 +473,7 @@ const handleAcceptPrice = async () => {
               : `${bidCount} bid${bidCount === 1 ? '' : 's'}`}
         </Typography>
 
-        {item.noPrice && isLowestBidReady && (
+        {item.noPrice && bidCount === 0 && isLowestBidReady && (
           <Alert severity="info" sx={{ mt: 1.5 }}>
             This listing has no price. You can bid any amount from {formatCurrency(lowestBidSetting.amount * lowestBidRate, viewerCurrencyLabel)}.
           </Alert>
@@ -611,6 +628,21 @@ const handleAcceptPrice = async () => {
           refreshUser().catch((refreshError) => console.error('Failed to refresh wallet after deposit', refreshError));
         }}
       />
+
+      <Dialog open={bidConfirmOpen} onClose={() => !placingBid && setBidConfirmOpen(false)}>
+        <DialogTitle>Confirm your bid</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to place a bid of {formatCurrency(Number(bidAmount || 0), viewerCurrencyLabel)}?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBidConfirmOpen(false)} disabled={placingBid}>Cancel</Button>
+          <Button onClick={confirmPlaceBid} disabled={placingBid} variant="contained" color="secondary">
+            {placingBid ? 'Placing bid...' : 'Confirm bid'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={acceptDialogOpen} onClose={() => !acceptingPrice && setAcceptDialogOpen(false)}>
         <DialogTitle>Accept price?</DialogTitle>

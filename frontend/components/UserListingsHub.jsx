@@ -224,18 +224,16 @@ export default function UserListingsHub() {
             px: 2,
             py: 0.5,
             borderRadius: '30px 30px 0 0',
-            backgroundColor: 'rgba(248, 216, 158, 0.88)',
-            backgroundImage: 'repeating-radial-gradient(ellipse at 50% 118%, transparent 0 20px, rgba(255, 255, 255, 0.22) 21px 22px, transparent 23px 40px), linear-gradient(160deg, rgba(255, 241, 207, 0.94), rgba(241, 190, 92, 0.8))',
-            backdropFilter: 'blur(12px) saturate(115%)',
-            color: '#4b3918',
-            border: '1px solid rgba(255, 249, 230, 0.72)',
-            boxShadow: '0 -4px 18px rgba(35, 23, 5, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.72)',
+            backgroundColor: 'rgba(71, 85, 105, 0.94)',
+            color: '#f8fafc',
+            border: '1px solid rgba(203, 213, 225, 0.24)',
+            boxShadow: '0 -4px 18px rgba(15, 23, 42, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
             textTransform: 'none',
             fontSize: 12,
             display: 'flex',
             flexDirection: 'column',
             gap: 0,
-            '&:hover': { backgroundColor: 'rgba(248, 216, 158, 0.94)' },
+            '&:hover': { backgroundColor: 'rgba(51, 65, 85, 0.98)' },
           }}
         >
           <KeyboardArrowUpIcon sx={{ fontSize: 21, animation: 'listing-arrow 1.1s ease-in-out infinite', '@keyframes listing-arrow': { '0%, 100%': { transform: 'translateY(2px)', opacity: 0.45 }, '50%': { transform: 'translateY(-2px)', opacity: 1 } } }} />

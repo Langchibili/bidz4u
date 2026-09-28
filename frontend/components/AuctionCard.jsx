@@ -263,7 +263,7 @@ export default function AuctionCard({ item, onClick }) {
               event.stopPropagation();
               setAcceptDialogOpen(true);
             }}
-            sx={{ mt: 1 }}
+            sx={{ mt: 1, display: 'flex', width: 'fit-content', alignSelf: 'flex-start' }}
           >
             Accept price
           </Button>

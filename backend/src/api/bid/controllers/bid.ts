@@ -496,7 +496,30 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
       if (!userId) return ctx.unauthorized('Login required');
       const bids = await strapi.db.query('api::bid.bid').findMany({
         where: { bidder: userId },
-        populate: ['auctionItem'],
+        populate: {
+          auctionItem: {
+            fields: [
+              'id',
+              'documentId',
+              'actTitle',
+              'actDescription',
+              'actAuctionStatus',
+              'actIsDraft',
+              'actListingTimeEnd',
+              'actCurrentHighestPriceNative',
+              'actStartingPriceNative',
+              'actNativeCurrencyCode',
+              'actTown',
+            ],
+            populate: {
+              actImages: { fields: ['url', 'formats'] },
+              itemOriginCountry: {
+                fields: ['id', 'countryName', 'countryCode'],
+                populate: { currency: { fields: ['currCode'] } },
+              },
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
       });
       ctx.send({ success: true, bids });
