@@ -54,6 +54,11 @@
       "relation": "manyToOne",
       "target": "api::country.country"
     },
+    "category": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::category.category"
+    },
     "bids": {
       "type": "relation",
       "relation": "oneToMany",

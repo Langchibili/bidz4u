@@ -1,0 +1,15 @@
+{
+  "kind": "collectionType",
+  "collectionName": "categories",
+  "info": {
+    "singularName": "category",
+    "pluralName": "categories",
+    "displayName": "Auction Category"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "name": { "type": "string", "required": true, "unique": true },
+    "slug": { "type": "uid", "targetField": "name", "required": true, "unique": true },
+    "isDefault": { "type": "boolean", "default": false }
+  }
+}

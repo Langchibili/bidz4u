@@ -6,6 +6,18 @@ export default {
   async beforeCreate(event: any) {
     const { data } = event.params;
 
+    if (!data?.category) {
+      let uncategorized = await strapi.db.query('api::category.category').findOne({
+        where: { slug: 'uncategorized' },
+      });
+      if (!uncategorized) {
+        uncategorized = await strapi.db.query('api::category.category').create({
+          data: { name: 'Uncategorized', slug: 'uncategorized', isDefault: true },
+        });
+      }
+      data.category = uncategorized.id;
+    }
+
     if (data?.noPrice === true) {
       data.actStartingPriceNative = 0;
       data.actCurrentHighestPriceNative = 0;

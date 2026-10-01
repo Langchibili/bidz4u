@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Typography, Skeleton, Stack, Chip } from '@mui/material';
+import { Box, Typography, Skeleton, Stack, Chip, Pagination } from '@mui/material';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
 import { formatCurrency } from '@/Functions';
@@ -36,18 +36,30 @@ export default function MyBidsPage() {
   const { isAuthenticated, hydrated } = useAuth();
   const [bids, setBids] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     if (hydrated && !isAuthenticated()) router.push('/login');
   }, [hydrated, isAuthenticated, router]);
 
   useEffect(() => {
+    if (!hydrated || !isAuthenticated()) return undefined;
+    let cancelled = false;
+    setLoading(true);
     apiClient
-      .get('/bids/me')
-      .then((res) => setBids(res?.bids || []))
+      .get(`/bids/me?page=${page}&pageSize=10`)
+      .then((res) => {
+        if (cancelled) return;
+        setBids(res?.bids || []);
+        setPageCount(Math.max(1, Number(res?.meta?.pagination?.pageCount) || 1));
+        setTotal(Number(res?.meta?.pagination?.total) || 0);
+      })
       .catch((err) => console.error('Failed to load bids', err))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [hydrated, isAuthenticated, page]);
 
   if (!hydrated || loading) {
     return (
@@ -112,6 +124,12 @@ export default function MyBidsPage() {
           <Typography color="text.secondary">You haven&apos;t placed any bids yet.</Typography>
         )}
       </Stack>
+
+      {total > 0 && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>{total} total bids</Typography>}
+
+      {pageCount > 1 && (
+        <Pagination count={pageCount} page={page} onChange={(_, value) => setPage(value)} color="secondary" sx={{ mt: 3, display: 'flex', justifyContent: 'center' }} />
+      )}
 
       <BottomNav />
     </Box>

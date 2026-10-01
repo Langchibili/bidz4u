@@ -507,6 +507,8 @@ export interface ApiAdmnSettingAdmnSetting extends Struct.SingleTypeSchema {
       'api::admn-setting.admn-setting'
     > &
       Schema.Attribute.Private;
+    notificationAutoHideSeconds: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<5>;
     overideOtpCode: Schema.Attribute.String &
       Schema.Attribute.DefaultTo<'121212'>;
     prefferedSettingsCurrency: Schema.Attribute.Relation<
@@ -610,6 +612,7 @@ export interface ApiAuctionItemAuctionItem extends Struct.CollectionTypeSchema {
     actTitle: Schema.Attribute.String & Schema.Attribute.Required;
     actTown: Schema.Attribute.String;
     bids: Schema.Attribute.Relation<'oneToMany', 'api::bid.bid'>;
+    category: Schema.Attribute.Relation<'manyToOne', 'api::category.category'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -745,6 +748,40 @@ export interface ApiBidz4UpayBidz4Upay extends Struct.CollectionTypeSchema {
       'manyToOne',
       'plugin::users-permissions.user'
     >;
+  };
+}
+
+export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
+  collectionName: 'categories';
+  info: {
+    displayName: 'Auction Category';
+    pluralName: 'categories';
+    singularName: 'category';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isDefault: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::category.category'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    publishedAt: Schema.Attribute.DateTime;
+    slug: Schema.Attribute.UID<'name'> &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -918,6 +955,57 @@ export interface ApiDeviceDevice extends Struct.CollectionTypeSchema {
     notificationToken: Schema.Attribute.String;
     platform: Schema.Attribute.Enumeration<['android', 'ios', 'web']>;
     publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
+export interface ApiNotificationNotification
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'notifications';
+  info: {
+    displayName: 'User Notification';
+    pluralName: 'notifications';
+    singularName: 'notification';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    body: Schema.Attribute.Text & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    data: Schema.Attribute.JSON;
+    isRead: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::notification.notification'
+    > &
+      Schema.Attribute.Private;
+    notificationType: Schema.Attribute.Enumeration<
+      [
+        'bid_placed',
+        'outbid',
+        'auction_closed',
+        'auction_forfeited',
+        'auction_paid',
+        'payment_success',
+        'payment_failed',
+        'payment_required',
+        'general',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'general'>;
+    publishedAt: Schema.Attribute.DateTime;
+    readAt: Schema.Attribute.DateTime;
+    title: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1600,10 +1688,12 @@ declare module '@strapi/strapi' {
       'api::auction-item.auction-item': ApiAuctionItemAuctionItem;
       'api::bid.bid': ApiBidBid;
       'api::bidz4upay.bidz4upay': ApiBidz4UpayBidz4Upay;
+      'api::category.category': ApiCategoryCategory;
       'api::commission-ledger.commission-ledger': ApiCommissionLedgerCommissionLedger;
       'api::country.country': ApiCountryCountry;
       'api::currency.currency': ApiCurrencyCurrency;
       'api::device.device': ApiDeviceDevice;
+      'api::notification.notification': ApiNotificationNotification;
       'api::otp-verification.otp-verification': ApiOtpVerificationOtpVerification;
       'api::transaction.transaction': ApiTransactionTransaction;
       'api::wallet.wallet': ApiWalletWallet;

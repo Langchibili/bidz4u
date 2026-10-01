@@ -62,9 +62,17 @@ function AuthenticatedNativeServices({ children }) {
       }
     };
 
+    const handleAnnouncement = (announcement) => handleNotification({
+      title: 'Bidz4U announcement',
+      body: announcement?.message || 'You have a new announcement.',
+      data: { kind: 'announcement', ...announcement },
+    });
+
     socket.on('notification:new', handleNotification);
+    socket.on('admin:announcement', handleAnnouncement);
     return () => {
       socket.off('notification:new', handleNotification);
+      socket.off('admin:announcement', handleAnnouncement);
       socket.disconnect();
     };
   }, [hydrated, isAuthenticated, isNative, user?.id, userType]);

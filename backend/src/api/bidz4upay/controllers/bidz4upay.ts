@@ -5,6 +5,7 @@ import { convertAmount } from '../../../services/currencyConversion';
 import { getAccountPhoneNumber, normalizePhoneNumber } from '../../../services/phoneNumber';
 import { getUnreservedLockedBalance } from '../../../services/lockedBidAutoSettlement';
 import socketService from '../../../services/socketService';
+import { createAndEmitNotification } from '../../../services/notificationService';
 
 // ─── Reference helpers ────────────────────────────────────────────────────────
 
@@ -191,6 +192,11 @@ async function handleWalletDepositSuccess(
     });
 
     socketService.emitPaymentSuccess(parseInt(userId), depositAmount, bidz4upayRecord.payReference);
+    await createAndEmitNotification(strapi, Number(userId), {
+      title: 'Wallet deposit successful',
+      body: `Your wallet deposit of ${depositAmount} ${bidz4upayRecord.payCurrencyCode} completed.`,
+      data: { kind: 'payment_success', reference: bidz4upayRecord.payReference, amount: depositAmount },
+    });
 
     strapi.log.info(`[Bidz4uPay:walletdeposit] +${depositAmount} → user ${userId}, new balance ${newBalance}`);
   } catch (err) {
@@ -322,12 +328,12 @@ async function handleWinnerPaymentSuccess(
     });
 
     socketService.emitPaymentSuccess(winnerId, Number(bidz4upayRecord.payAmount), bidz4upayRecord.payReference);
-    socketService.emitNotification(sellerId, {
+    await createAndEmitNotification(strapi, sellerId, {
       title: 'Item sold, delivery needed',
       body: 'Payment is secured in escrow. Deliver the item so the buyer can confirm receipt and release your funds.',
       data: { kind: 'auction_paid', auctionItemId: Number(auctionItemId), amount: escrowAmount, currency: sellerCurrency },
     });
-    socketService.emitNotification(winnerId, {
+    await createAndEmitNotification(strapi, winnerId, {
       title: 'Payment secured',
       body: 'Your item is awaiting delivery. Please wait for it to arrive, then confirm receipt to release the seller’s funds.',
       data: { kind: 'auction_paid', auctionItemId: Number(auctionItemId), amount: saleAmountNative, currency: itemCurrency },
@@ -362,6 +368,11 @@ async function handleWithdrawalCompleted(
     });
 
     socketService.emitPaymentSuccess(parseInt(userId), Number(bidz4upayRecord.payAmount), bidz4upayRecord.payReference);
+    await createAndEmitNotification(strapi, Number(userId), {
+      title: 'Withdrawal completed',
+      body: `Your withdrawal of ${bidz4upayRecord.payAmount} ${bidz4upayRecord.payCurrencyCode} completed.`,
+      data: { kind: 'payment_success', reference: bidz4upayRecord.payReference, amount: bidz4upayRecord.payAmount },
+    });
     strapi.log.info(`[Bidz4uPay:withdraw] Withdrawal completed for user ${userId}`);
   } catch (err) {
     strapi.log.error('[Bidz4uPay:withdraw]', err);
@@ -400,6 +411,11 @@ async function handleWithdrawalFailed(
       Number(bidz4upayRecord.payAmount),
       bidz4upayRecord.payReference,
     );
+    await createAndEmitNotification(strapi, Number(userId), {
+      title: 'Withdrawal failed',
+      body: 'Your withdrawal failed. The funds have been returned to your wallet.',
+      data: { kind: 'payment_failed', reference: bidz4upayRecord.payReference, amount: bidz4upayRecord.payAmount },
+    });
     strapi.log.warn(`[Bidz4uPay:withdraw] Withdrawal failed for user ${userId} — balance refunded`);
   } catch (err) {
     strapi.log.error('[Bidz4uPay:withdrawFailed]', err);
@@ -632,6 +648,11 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
           await handleCollectionSuccess(updatedRecord, referenceData, result.raw || {});
         } else {
           socketService.emitPaymentFailed(userId, numAmount, reference);
+          await createAndEmitNotification(strapi, userId, {
+            title: 'Payment failed',
+            body: result.raw?.reasonForFailure || 'Your payment could not be completed.',
+            data: { kind: 'payment_failed', reference, amount: numAmount },
+          });
         }
       }
 
@@ -719,6 +740,11 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
               },
             });
             socketService.emitPaymentFailed(userId, Number(record.payAmount), record.payReference);
+            await createAndEmitNotification(strapi, userId, {
+              title: 'Payment failed',
+              body: (gatewayData as any).reasonForFailure || 'Your payment could not be completed.',
+              data: { kind: 'payment_failed', reference: record.payReference, amount: record.payAmount },
+            });
           }
 
           record = await strapi.db.query('api::bidz4upay.bidz4upay').findOne({ where: { id: record.id } });
@@ -822,6 +848,11 @@ export default factories.createCoreController('api::bidz4upay.bidz4upay', ({ str
             Number(payRecord.payAmount),
             payRecord.payReference,
           );
+          await createAndEmitNotification(strapi, Number(payRecord.user), {
+            title: 'Payment failed',
+            body: (data as any).reasonForFailure || 'Your payment could not be completed.',
+            data: { kind: 'payment_failed', reference: payRecord.payReference, amount: payRecord.payAmount },
+          });
         }
       }
     } catch (err) {

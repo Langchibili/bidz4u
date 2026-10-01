@@ -45,6 +45,7 @@ import { formatCurrency, getCurrencySymbol, getMediaUrl } from '@/Functions';
 import { useAuctionTimer } from '@/lib/hooks/useAuctionTimer';
 import { useSocket, getDisplayedAuctionPrice, useViewerCurrencyRate } from '@/lib/hooks/useSocket';
 import { CUSTOM_THEME_COLORS } from '@/Constants';
+import ShareAuctionButton from '@/components/ShareAuctionButton';
 
 export default function AuctionCard({ item, onClick }) {
   const { user, countryConfig, effectiveSettings } = useAuth();
@@ -203,18 +204,21 @@ export default function AuctionCard({ item, onClick }) {
           >
             {item.actTitle}
           </Typography>
-          <Chip
-            size="small"
-            label={timer.isExpired ? 'Ended' : timer.display}
-            sx={{
-              flexShrink: 0,
-              height: 20,
-              fontSize: 10,
-              fontWeight: 700,
-              bgcolor: timer.isInFinalMinute ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
-              color: timer.isInFinalMinute ? 'error.main' : CUSTOM_THEME_COLORS.ACCENT_GOLD,
-            }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <Chip
+              size="small"
+              label={timer.isExpired ? 'Ended' : timer.display}
+              sx={{
+                flexShrink: 0,
+                height: 20,
+                fontSize: 10,
+                fontWeight: 700,
+                bgcolor: timer.isInFinalMinute ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                color: timer.isInFinalMinute ? 'error.main' : CUSTOM_THEME_COLORS.ACCENT_GOLD,
+              }}
+            />
+            <ShareAuctionButton item={item} sx={{ ml: 0.25, width: 30, height: 30 }} />
+          </Box>
         </Box>
 
         {item.actTown && (

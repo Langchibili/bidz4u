@@ -3,23 +3,25 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Typography, Skeleton, Stack, TextField, InputAdornment, Pagination } from '@mui/material';
+import { Box, Typography, Skeleton, Stack, TextField, InputAdornment, Button } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { apiClient } from '@/lib/api/client';
+import { STORAGE_KEYS } from '@/Constants';
 import AuctionCard from '@/components/AuctionCard';
+import NotificationInbox from '@/components/NotificationInbox';
 import BottomNav from '@/components/BottomNav';
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, hydrated, user } = useAuth();
+  const { isAuthenticated, hydrated, user, countryConfig } = useAuth();
   const [items, setItems] = useState([]);
   const [pinnedItems, setPinnedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageCount, setPageCount] = useState(1);
+  const [activeCount, setActiveCount] = useState(0);
+  const [preferredListingCountryId, setPreferredListingCountryId] = useState('');
 
   useEffect(() => {
     if (hydrated && !isAuthenticated()) {
@@ -33,6 +35,12 @@ export default function Home() {
   }, [searchText]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    const storedCountryId = localStorage.getItem(STORAGE_KEYS.PREFERRED_LISTING_COUNTRY);
+    setPreferredListingCountryId(storedCountryId || String(countryConfig?.countryId || ''));
+  }, [hydrated, countryConfig?.countryId]);
+
+  useEffect(() => {
     if (!hydrated) return undefined;
     if (!isAuthenticated()) {
       setLoading(false);
@@ -43,62 +51,67 @@ export default function Home() {
     setLoading(true);
     const loadAuctions = async () => {
       let userPinnedItems = [];
+      const [bidsResult, countResult] = await Promise.allSettled([
+        apiClient.get('/bids/me/active-auctions'),
+        apiClient.get('/auction-items?filters[actAuctionStatus][$eq]=active&filters[actIsDraft][$eq]=false&fields[0]=id&pagination[pageSize]=1'),
+      ]);
+      if (countResult.status === 'fulfilled') {
+        setActiveCount(Number(countResult.value?.meta?.pagination?.total) || 0);
+      }
       try {
-        const bidsResponse = await apiClient.get('/bids/me');
+        if (bidsResult.status !== 'fulfilled') throw bidsResult.reason;
+        const bidsResponse = bidsResult.value;
         const pinnedById = new Map();
         (bidsResponse?.bids || []).forEach((bid) => {
           const auction = bid.auctionItem;
           if (!auction || auction.actAuctionStatus !== 'active' || auction.actIsDraft) return;
-          if (search && !`${auction.actTitle || ''} ${auction.actDescription || ''}`.toLowerCase().includes(search.toLowerCase())) return;
+          if (search && !`${auction.actTitle || ''} ${auction.actDescription || ''} ${auction.category?.name || ''}`.toLowerCase().includes(search.toLowerCase())) return;
           const numericId = apiClient.resolveId(auction, 'id');
           if (numericId == null) return;
           const id = String(numericId);
           if (!pinnedById.has(id)) pinnedById.set(id, auction);
         });
-        userPinnedItems = Array.from(pinnedById.values());
+        const preferredCountryId = preferredListingCountryId || String(countryConfig?.countryId || '');
+        const preferred = [];
+        const otherCountries = [];
+        Array.from(pinnedById.values()).forEach((auction) => {
+          if (String(apiClient.resolveId(auction.itemOriginCountry, 'id')) === preferredCountryId) preferred.push(auction);
+          else otherCountries.push(auction);
+        });
+        const mostBidsFirst = (left, right) => Number(right.bidCount || 0) - Number(left.bidCount || 0);
+        preferred.sort(mostBidsFirst);
+        otherCountries.sort(mostBidsFirst);
+        userPinnedItems = [...preferred, ...otherCountries];
       } catch (err) {
         console.error('Failed to load auctions the user has bid on', err);
       }
       if (cancelled) return;
       setPinnedItems(userPinnedItems);
 
-      const pinnedPageItems = userPinnedItems.slice((page - 1) * 10, page * 10);
-      const regularSlots = 10 - pinnedPageItems.length;
-      const regularStart = Math.max(0, (page - 1) * 10 - userPinnedItems.length);
+      const pinnedHomeItems = userPinnedItems.slice(0, 2);
+      const regularSlots = Math.max(0, 2 - pinnedHomeItems.length);
       const params = new URLSearchParams({
-        'filters[actAuctionStatus][$eq]': 'active',
-        'filters[actIsDraft][$eq]': 'false',
-        'populate[actImages][fields][0]': 'url',
-        'populate[actImages][fields][1]': 'formats',
-        'populate[itemOriginCountry][fields][0]': 'id',
-        'populate[itemOriginCountry][fields][1]': 'countryName',
-        'populate[itemOriginCountry][fields][2]': 'countryCode',
-        'populate[itemOriginCountry][populate][currency][fields][0]': 'currCode',
-        'pagination[start]': String(regularStart),
-        'pagination[limit]': String(Math.max(1, regularSlots)),
-        'pagination[withCount]': 'true',
-        sort: 'createdAt:desc',
+        page: '1',
+        pageSize: '2',
+        start: '0',
+        preferredCountryId: preferredListingCountryId || String(countryConfig?.countryId || ''),
+        excludeIds: userPinnedItems.map((item) => apiClient.resolveId(item, 'id')).join(','),
+        sort: 'bids_desc',
       });
-      userPinnedItems.forEach((item, index) => {
-        params.set(`filters[id][$notIn][${index}]`, String(apiClient.resolveId(item, 'id')));
-      });
-      if (search) {
-        params.set('filters[$or][0][actTitle][$containsi]', search);
-        params.set('filters[$or][1][actDescription][$containsi]', search);
-      }
+      if (search) params.set('search', search);
 
       try {
-        const response = await apiClient.get(`/auction-items?${params.toString()}`);
-        if (cancelled) return;
-        const regularItems = Array.isArray(response?.data) ? response.data : [];
-        setItems(regularItems.slice(0, regularSlots));
-        const regularTotal = Number(response?.meta?.pagination?.total) || 0;
-        setPageCount(Math.max(1, Math.ceil((userPinnedItems.length + regularTotal) / 10)));
+        if (regularSlots > 0) {
+          const response = await apiClient.get(`/auction-items/marketplace?${params.toString()}`);
+          if (cancelled) return;
+          setItems((Array.isArray(response?.data) ? response.data : []).slice(0, regularSlots));
+        } else if (!cancelled) {
+          setItems([]);
+        }
       } catch (err) {
         console.error('Failed to load auctions', err);
         if (!cancelled) {
           setItems([]);
-          setPageCount(1);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -108,11 +121,7 @@ export default function Home() {
     loadAuctions();
 
     return () => { cancelled = true; };
-  }, [hydrated, isAuthenticated, user?.id, page, search]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
+  }, [hydrated, isAuthenticated, user?.id, countryConfig?.countryId, preferredListingCountryId, search]);
 
   if (!hydrated) {
     return (
@@ -126,19 +135,21 @@ export default function Home() {
     );
   }
 
+  const visibleItems = [...pinnedItems.slice(0, 2), ...items].slice(0, 2);
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3, pb: 10 }}>
-      <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>
-        Live Auctions
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, mb: 0 }}>
+          Live Auctions
+        </Typography>
+        <NotificationInbox />
+      </Box>
 
       <TextField
         fullWidth
         value={searchText}
-        onChange={(event) => {
-          setSearchText(event.target.value);
-          setPage(1);
-        }}
+        onChange={(event) => setSearchText(event.target.value)}
         placeholder="Search auction titles and descriptions"
         aria-label="Search auctions"
         sx={{ mb: 2.5 }}
@@ -159,7 +170,7 @@ export default function Home() {
         </Stack>
       ) : (
         <Stack spacing={1.5}>
-          {[...pinnedItems.slice((page - 1) * 10, page * 10), ...items].map((item) => (
+          {visibleItems.map((item) => (
             <AuctionCard
               key={apiClient.resolveId(item)}
               item={item}
@@ -175,22 +186,20 @@ export default function Home() {
         </Stack>
       )}
 
-      {!loading && items.length === 0 && (
+      {!loading && visibleItems.length === 0 && (
         <Typography color="text.secondary">
           {search ? 'No auctions match your search.' : 'No active auctions right now — check back soon.'}
         </Typography>
       )}
 
-      {!loading && items.length > 0 && (
-        <Pagination
-          count={pageCount}
-          page={page}
-          onChange={(_, nextPage) => setPage(nextPage)}
-          color="secondary"
-          aria-label="Auction pages"
-          sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}
-        />
+      {countryConfig?.savedCountryName && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+          Your country: {countryConfig.savedCountryName}
+        </Typography>
       )}
+      <Button fullWidth variant="text" color="secondary" onClick={() => router.push('/auctions')} sx={{ mt: 1, minHeight: 44, border: 0 }}>
+        View all auctions ({activeCount})
+      </Button>
 
       <BottomNav />
     </Box>

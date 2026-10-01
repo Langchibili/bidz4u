@@ -1,5 +1,5 @@
 import { convertAmount } from './currencyConversion';
-import socketService from './socketService';
+import { createAndEmitNotification } from './notificationService';
 
 export async function getUnreservedLockedBalance(strapi: any, bidderId: number, wallet: any, excludedBidId: number): Promise<number> {
   const leadingBids = await strapi.db.query('api::bid.bid').findMany({
@@ -138,12 +138,12 @@ export async function autoSettleFromWinningBidDeposit(strapi: any, itemId: numbe
   });
 
   if (didSettle) {
-    socketService.emitNotification(item.seller.id, {
+    await createAndEmitNotification(strapi, item.seller.id, {
       title: 'Item sold, delivery needed',
       body: 'The winning bid deposit covered the purchase. Deliver the item so the buyer can confirm receipt and release your funds.',
       data: { kind: 'auction_paid', auctionItemId: item.id, amount: sellerEscrowAmount, currency: sellerCurrency },
     });
-    socketService.emitNotification(item.currentWinningBuyer.id, {
+    await createAndEmitNotification(strapi, item.currentWinningBuyer.id, {
       title: 'Payment secured',
       body: 'Your locked bid deposit covered the purchase. Your item is awaiting delivery; confirm receipt after it arrives.',
       data: { kind: 'auction_paid', auctionItemId: item.id, amount: salePrice, currency: itemCurrency },

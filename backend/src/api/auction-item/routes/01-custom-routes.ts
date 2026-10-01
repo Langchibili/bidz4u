@@ -2,6 +2,12 @@ export default {
   routes: [
     {
       method: "GET",
+      path: "/auction-items/marketplace",
+      handler: "auction-item.marketplace",
+      config: { auth: {} },
+    },
+    {
+      method: "GET",
       path: "/auction-items/me/listings",
       handler: "auction-item.myListings",
       config: { auth: {} },

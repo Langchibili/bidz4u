@@ -494,22 +494,49 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
     try {
       const userId = ctx.state.user?.id;
       if (!userId) return ctx.unauthorized('Login required');
+      const page = Math.max(1, Number(ctx.query.page) || 1);
+      const pageSize = Math.min(50, Math.max(1, Number(ctx.query.pageSize) || 10));
+      const where = { bidder: userId };
+      const [bids, total] = await Promise.all([
+        strapi.db.query('api::bid.bid').findMany({
+          where,
+          populate: {
+            auctionItem: {
+              fields: ['id', 'documentId', 'actTitle', 'actListingTimeEnd', 'actAuctionStatus'],
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          offset: (page - 1) * pageSize,
+          limit: pageSize,
+        }),
+        strapi.db.query('api::bid.bid').count({ where }),
+      ]);
+      ctx.send({
+        success: true,
+        bids,
+        meta: { pagination: { page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)), total } },
+      });
+    } catch (error) {
+      console.error('Error fetching own bids:', error);
+      ctx.internalServerError('Failed to fetch bids');
+    }
+  },
+
+  async activeAuctions(ctx) {
+    try {
+      const userId = ctx.state.user?.id;
+      if (!userId) return ctx.unauthorized('Login required');
       const bids = await strapi.db.query('api::bid.bid').findMany({
-        where: { bidder: userId },
+        where: {
+          bidder: userId,
+          auctionItem: { actAuctionStatus: 'active', actIsDraft: false },
+        },
         populate: {
           auctionItem: {
             fields: [
-              'id',
-              'documentId',
-              'actTitle',
-              'actDescription',
-              'actAuctionStatus',
-              'actIsDraft',
-              'actListingTimeEnd',
-              'actCurrentHighestPriceNative',
-              'actStartingPriceNative',
-              'actNativeCurrencyCode',
-              'actTown',
+              'id', 'documentId', 'actTitle', 'actDescription', 'actAuctionStatus',
+              'actIsDraft', 'actListingTimeEnd', 'actCurrentHighestPriceNative',
+              'actStartingPriceNative', 'actNativeCurrencyCode', 'actTown', 'noPrice',
             ],
             populate: {
               actImages: { fields: ['url', 'formats'] },
@@ -517,15 +544,41 @@ export default factories.createCoreController('api::bid.bid', ({ strapi }) => ({
                 fields: ['id', 'countryName', 'countryCode'],
                 populate: { currency: { fields: ['currCode'] } },
               },
+              category: { fields: ['id', 'name', 'slug'] },
             },
           },
         },
         orderBy: { createdAt: 'desc' },
+        limit: 100000,
       });
-      ctx.send({ success: true, bids });
+      const auctionsById = new Map<number, any>();
+      bids.forEach((bid: any) => {
+        const item = bid.auctionItem;
+        if (item?.id && !auctionsById.has(Number(item.id))) auctionsById.set(Number(item.id), item);
+      });
+      const auctionIds = Array.from(auctionsById.keys());
+      const bidCounts = new Map<number, number>();
+      if (auctionIds.length) {
+        const countRows = await strapi.db.query('api::bid.bid').findMany({
+          where: { auctionItem: { id: { $in: auctionIds } } },
+          select: ['id'],
+          populate: { auctionItem: { select: ['id'] } },
+          limit: 100000,
+        });
+        countRows.forEach((row: any) => {
+          const auctionId = Number(row.auctionItem?.id);
+          if (!Number.isFinite(auctionId)) return;
+          bidCounts.set(auctionId, (bidCounts.get(auctionId) || 0) + 1);
+        });
+      }
+      const auctions = Array.from(auctionsById.entries()).map(([id, item]) => ({
+        ...item,
+        bidCount: bidCounts.get(id) || 0,
+      }));
+      ctx.send({ success: true, bids: auctions.map((auctionItem) => ({ auctionItem })) });
     } catch (error) {
-      console.error('Error fetching own bids:', error);
-      ctx.internalServerError('Failed to fetch bids');
+      strapi.log.error('[bid.activeAuctions]', error);
+      ctx.internalServerError('Failed to load your active bid auctions');
     }
   },
 }));

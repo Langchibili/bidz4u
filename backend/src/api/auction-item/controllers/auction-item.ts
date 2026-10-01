@@ -253,6 +253,177 @@
 import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::auction-item.auction-item', ({ strapi }) => ({
+  async marketplace(ctx) {
+    try {
+      const query = ctx.query || {};
+      const page = Math.max(1, Number(query.page) || 1);
+      const pageSize = Math.min(48, Math.max(1, Number(query.pageSize) || 10));
+      const start = query.start === undefined ? (page - 1) * pageSize : Math.max(0, Number(query.start) || 0);
+      const search = String(query.search || '').trim();
+      const countryId = Number(query.countryId) || null;
+      const preferredCountryId = Number(query.preferredCountryId) || null;
+      const categoryId = Number(query.categoryId) || null;
+      const town = String(query.town || '').trim();
+      const minPrice = query.minPrice === undefined || query.minPrice === '' ? null : Number(query.minPrice);
+      const maxPrice = query.maxPrice === undefined || query.maxPrice === '' ? null : Number(query.maxPrice);
+      const endingWithinHours = Number(query.endingWithinHours) || null;
+      const excludeIds = String(query.excludeIds || '').split(',').map(Number).filter(Number.isFinite);
+      const conditions: Record<string, any>[] = [
+        { actAuctionStatus: 'active' },
+        { actIsDraft: false },
+      ];
+
+      if (countryId) conditions.push({ itemOriginCountry: { id: countryId } });
+      if (categoryId) conditions.push({ category: { id: categoryId } });
+      if (town) conditions.push({ actTown: { $containsi: town } });
+      if (Number.isFinite(minPrice)) {
+        conditions.push({ actCurrentHighestPriceNative: { $gte: minPrice } });
+      }
+      if (Number.isFinite(maxPrice)) {
+        conditions.push({ actCurrentHighestPriceNative: { $lte: maxPrice } });
+      }
+      if (query.noPrice === 'true') conditions.push({ noPrice: true });
+      if (endingWithinHours) {
+        const now = new Date();
+        conditions.push({
+          actListingTimeEnd: {
+            $gte: now,
+            $lte: new Date(now.getTime() + endingWithinHours * 60 * 60 * 1000),
+          },
+        });
+      }
+      if (search) {
+        conditions.push({
+          $or: [
+            { actTitle: { $containsi: search } },
+            { actDescription: { $containsi: search } },
+            { category: { name: { $containsi: search } } },
+          ],
+        });
+      }
+      if (excludeIds.length) conditions.push({ id: { $notIn: excludeIds } });
+
+      const where = { $and: conditions };
+      const sort = String(query.sort || 'newest');
+      const lightweightFields = [
+        'id',
+        'actCurrentHighestPriceNative',
+        'actStartingPriceNative',
+        'actListingTimeEnd',
+        'createdAt',
+      ];
+      const preferredWhere = preferredCountryId && !countryId
+        ? { $and: [...conditions, { itemOriginCountry: { id: preferredCountryId } }] }
+        : where;
+      const otherWhere = preferredCountryId && !countryId
+        ? { $and: [...conditions, { itemOriginCountry: { id: { $ne: preferredCountryId } } }] }
+        : null;
+      const [preferredRows, otherRows] = await Promise.all([
+        strapi.db.query('api::auction-item.auction-item').findMany({
+          where: preferredWhere,
+          select: lightweightFields,
+          orderBy: { createdAt: 'desc' },
+          limit: 100000,
+        }),
+        otherWhere
+          ? strapi.db.query('api::auction-item.auction-item').findMany({
+            where: otherWhere,
+            select: lightweightFields,
+            orderBy: { createdAt: 'desc' },
+            limit: 100000,
+          })
+          : Promise.resolve([]),
+      ]);
+      const candidateRows = [...preferredRows, ...otherRows];
+      const candidateIds = candidateRows.map((item) => Number(item.id)).filter(Number.isFinite);
+      const total = candidateIds.length;
+
+      const bidCounts = new Map<number, number>();
+      const userBidIds = new Set<number>();
+      if (candidateIds.length) {
+        const countRows = await strapi.db.query('api::bid.bid').findMany({
+          where: { auctionItem: { id: { $in: candidateIds } } },
+          select: ['id'],
+          populate: { auctionItem: { select: ['id'] } },
+          limit: 100000,
+        });
+        countRows.forEach((row: any) => {
+          const auctionId = Number(row.auctionItem?.id);
+          if (!Number.isFinite(auctionId)) return;
+          bidCounts.set(auctionId, (bidCounts.get(auctionId) || 0) + 1);
+        });
+
+        const userId = Number(ctx.state.user?.id);
+        if (Number.isInteger(userId) && userId > 0) {
+          const userBids = await strapi.db.query('api::bid.bid').findMany({
+            where: { bidder: userId, auctionItem: { id: { $in: candidateIds } } },
+            select: ['id'],
+            populate: { auctionItem: { select: ['id'] } },
+            limit: 100000,
+          });
+          userBids.forEach((bid: any) => {
+            const auctionId = Number(bid.auctionItem?.id);
+            if (candidateIds.includes(auctionId)) userBidIds.add(auctionId);
+          });
+        }
+      }
+
+      const candidateById = new Map(candidateRows.map((item) => [Number(item.id), item]));
+      const sortGroup = (ids: number[]) => ids.sort((leftId, rightId) => {
+        const left = candidateById.get(leftId) || {};
+        const right = candidateById.get(rightId) || {};
+        let comparison = 0;
+        if (sort === 'price_asc') comparison = Number(left.actCurrentHighestPriceNative || left.actStartingPriceNative || 0) - Number(right.actCurrentHighestPriceNative || right.actStartingPriceNative || 0);
+        else if (sort === 'price_desc') comparison = Number(right.actCurrentHighestPriceNative || right.actStartingPriceNative || 0) - Number(left.actCurrentHighestPriceNative || left.actStartingPriceNative || 0);
+        else if (sort === 'ending_soon') comparison = new Date(left.actListingTimeEnd || 0).getTime() - new Date(right.actListingTimeEnd || 0).getTime();
+        else if (sort === 'newest') comparison = new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
+        else if (sort === 'bids_asc') comparison = (bidCounts.get(leftId) || 0) - (bidCounts.get(rightId) || 0);
+        if (comparison !== 0) return comparison;
+        return (bidCounts.get(rightId) || 0) - (bidCounts.get(leftId) || 0);
+      });
+
+      const preferredIds = sortGroup(preferredRows.map((item) => Number(item.id)));
+      const otherIds = sortGroup(otherRows.map((item) => Number(item.id)));
+      const userBidPreferred = preferredIds.filter((id) => userBidIds.has(id));
+      const userBidOther = otherIds.filter((id) => userBidIds.has(id));
+      const notBidPreferred = preferredIds.filter((id) => !userBidIds.has(id));
+      const notBidOther = otherIds.filter((id) => !userBidIds.has(id));
+      const orderedIds = [...userBidPreferred, ...userBidOther, ...notBidPreferred, ...notBidOther];
+
+      const pageIds = orderedIds.slice(start, start + pageSize);
+      const pageRecords = pageIds.length
+        ? await strapi.db.query('api::auction-item.auction-item').findMany({
+          where: { id: { $in: pageIds } },
+          populate: {
+            actImages: { select: ['url', 'formats'] },
+            category: true,
+            itemOriginCountry: { populate: { currency: true } },
+          },
+        })
+        : [];
+      const recordsById = new Map(pageRecords.map((item: any) => [Number(item.id), item]));
+      const orderedItems = pageIds.map((id) => ({
+        ...recordsById.get(id),
+        bidCount: bidCounts.get(id) || 0,
+      })).filter((item) => item.id);
+
+      ctx.send({
+        data: orderedItems,
+        meta: {
+          pagination: {
+            page,
+            pageSize,
+            pageCount: Math.max(1, Math.ceil(total / pageSize)),
+            total,
+          },
+        },
+      });
+    } catch (error) {
+      strapi.log.error('[auction-item.marketplace]', error);
+      ctx.internalServerError('Failed to load auctions');
+    }
+  },
+
   async create(ctx) {
     try {
       const userId = ctx.state.user?.id;

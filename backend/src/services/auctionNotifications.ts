@@ -1,4 +1,4 @@
-import socketService from './socketService';
+import { createAndEmitNotification } from './notificationService';
 
 type NotificationKind = 'bid_placed' | 'outbid' | 'auction_closed' | 'auction_forfeited';
 
@@ -28,8 +28,8 @@ async function getBidderIds(strapi: any, auctionItemId: number) {
   return bidderIds;
 }
 
-function send(userId: number, kind: NotificationKind, input: AuctionNotificationInput, title: string, body: string) {
-  socketService.emitNotification(userId, {
+function send(strapi: any, userId: number, kind: NotificationKind, input: AuctionNotificationInput, title: string, body: string) {
+  return createAndEmitNotification(strapi, userId, {
     title,
     body,
     data: {
@@ -51,11 +51,11 @@ export async function notifyBidPlaced(strapi: any, input: AuctionNotificationInp
 
   for (const userId of recipients) {
     if (userId === Number(input.sellerId)) {
-      send(userId, 'bid_placed', input, 'New bid received', 'A new bid was placed on your auction.');
+      await send(strapi, userId, 'bid_placed', input, 'New bid received', 'A new bid was placed on your auction.');
     } else if (userId === Number(input.bidderId)) {
-      send(userId, 'bid_placed', input, 'Bid placed', 'Your bid was placed successfully.');
+      await send(strapi, userId, 'bid_placed', input, 'Bid placed', 'Your bid was placed successfully.');
     } else {
-      send(userId, 'outbid', input, 'New bid on an auction you joined', 'Another bidder placed a new bid.');
+      await send(strapi, userId, 'outbid', input, 'New bid on an auction you joined', 'Another bidder placed a new bid.');
     }
   }
 }
@@ -67,9 +67,10 @@ export async function notifyAuctionClosed(strapi: any, input: AuctionNotificatio
 
   for (const userId of recipients) {
     if (userId === Number(input.sellerId)) {
-      send(userId, 'auction_closed', input, 'Auction ended', 'Your auction has ended.');
+      await send(strapi, userId, 'auction_closed', input, 'Auction ended', 'Your auction has ended.');
     } else if (userId === Number(input.winnerId)) {
-      send(
+      await send(
+        strapi,
         userId,
         'auction_closed',
         input,
@@ -79,7 +80,7 @@ export async function notifyAuctionClosed(strapi: any, input: AuctionNotificatio
           : 'You won this auction. Complete payment to continue.'
       );
     } else {
-      send(userId, 'auction_closed', input, 'Auction ended', 'The auction ended with another winning bidder.');
+      await send(strapi, userId, 'auction_closed', input, 'Auction ended', 'The auction ended with another winning bidder.');
     }
   }
 }
@@ -91,11 +92,11 @@ export async function notifyAuctionForfeited(strapi: any, input: AuctionNotifica
 
   for (const userId of recipients) {
     if (userId === Number(input.winnerId)) {
-      send(userId, 'auction_forfeited', input, 'Auction payment expired', 'Your winning bid was forfeited because payment was not completed.');
+      await send(strapi, userId, 'auction_forfeited', input, 'Auction payment expired', 'Your winning bid was forfeited because payment was not completed.');
     } else if (userId === Number(input.sellerId)) {
-      send(userId, 'auction_forfeited', input, 'Winning bid forfeited', 'The winning bidder did not complete payment.');
+      await send(strapi, userId, 'auction_forfeited', input, 'Winning bid forfeited', 'The winning bidder did not complete payment.');
     } else {
-      send(userId, 'auction_forfeited', input, 'Auction updated', 'The winning bid was forfeited.');
+      await send(strapi, userId, 'auction_forfeited', input, 'Auction updated', 'The winning bid was forfeited.');
     }
   }
 }

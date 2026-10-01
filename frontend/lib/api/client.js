@@ -147,6 +147,7 @@ export const apiClient = {
   //   apiClient.get(`/auction-items/${apiClient.resolveId(item)}`)
   get: (path, uidType = DEFAULT_UID_TYPE) => request('GET', path, undefined, uidType),
   post: (path, body, uidType = DEFAULT_UID_TYPE) => request('POST', path, body, uidType),
+  patch: (path, body, uidType = DEFAULT_UID_TYPE) => request('PATCH', path, body, uidType),
   put: (path, body, uidType = DEFAULT_UID_TYPE) => request('PUT', path, body, uidType),
   delete: (path, uidType = DEFAULT_UID_TYPE) => request('DELETE', path, undefined, uidType),
   resolveId,

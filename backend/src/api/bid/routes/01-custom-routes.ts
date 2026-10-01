@@ -1,6 +1,12 @@
 export default {
   routes: [
     {
+      method: "GET",
+      path: "/bids/me/active-auctions",
+      handler: "bid.activeAuctions",
+      config: { policies: [], middlewares: [] },
+    },
+    {
       method: "POST",
       path: "/bids/place",
       handler: "bid.place",

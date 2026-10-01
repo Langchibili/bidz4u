@@ -59,6 +59,7 @@ export async function resolveSettingsForCountry(strapi: any, countryId?: number 
   resolved._settingsBaseCurrency = settingsBaseCurrency;
   resolved._userCurrency = userCurrency;
   resolved._pollIntervalMs = resolved.cntPollIntervalMs;
+  resolved.notificationAutoHideSeconds = Number(admnSettings?.notificationAutoHideSeconds) || 5;
 
   // minimumAmountBeforeBid is denominated in the country's currency if the
   // country overrode it, otherwise in admn_settings.prefferedSettingsCurrency.

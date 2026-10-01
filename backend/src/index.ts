@@ -12,6 +12,15 @@ export default {
     socketService.connect();
     console.log('✅ Socket bridge initialized');
 
+    let uncategorized = await strapi.db.query('api::category.category').findOne({
+      where: { slug: 'uncategorized' },
+    });
+    if (!uncategorized) {
+      uncategorized = await strapi.db.query('api::category.category').create({
+        data: { name: 'Uncategorized', slug: 'uncategorized', isDefault: true },
+      });
+    }
+
     const authenticatedRole = await strapi.db.query('plugin::users-permissions.role').findOne({
       where: { type: 'authenticated' },
     });
@@ -19,6 +28,14 @@ export default {
       for (const action of [
         'api::auction-item.auction-item.myListings',
         'api::auction-item.auction-item.removeMine',
+        'api::auction-item.auction-item.marketplace',
+        'api::category.category.find',
+        'api::category.category.findOne',
+        'api::notification.notification.mine',
+        'api::notification.notification.unreadCount',
+        'api::notification.notification.markRead',
+        'api::notification.notification.markUnread',
+        'api::notification.notification.markAllRead',
       ]) {
         const permission = await strapi.db.query('plugin::users-permissions.permission').findOne({
           where: { action, role: authenticatedRole.id },

@@ -63,6 +63,7 @@
       "default": "pawapay"
     },
     "fallbackPollIntervalMs": { "type": "integer", "default": 3000 },
+    "notificationAutoHideSeconds": { "type": "integer", "default": 5 },
     "overideOtpCode": { "type": "string", "default": "121212" },
     "prefferedSettingsCurrency": {
       "type": "relation",

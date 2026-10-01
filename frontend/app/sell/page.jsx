@@ -2248,6 +2248,8 @@ function SellPageInner() {
 
   const [countries, setCountries] = useState([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [drafts, setDrafts] = useState([]);
 
   const [title, setTitle] = useState('');
@@ -2256,6 +2258,7 @@ function SellPageInner() {
   const [noPrice, setNoPrice] = useState(true);
   const [town, setTown] = useState('');
   const [selectedCountryId, setSelectedCountryId] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [endDateTime, setEndDateTime] = useState('');
   const [useDatePicker, setUseDatePicker] = useState(false);
   const endDateTimeInputRef = useRef(null);
@@ -2313,6 +2316,11 @@ function SellPageInner() {
     setStartingPrice(listingHasNoPrice ? '0' : entity.actStartingPriceNative ? String(entity.actStartingPriceNative) : '');
     setTown(entity.actTown || '');
     setSelectedCountryId(apiClient.resolveId(entity.itemOriginCountry, 'id') || entity.itemOriginCountry || '');
+    setSelectedCategoryId(
+      apiClient.resolveId(entity.category, 'id')
+      || categories.find((category) => category.slug === 'uncategorized')?.id
+      || ''
+    );
     const savedEndTime = entity.actListingTimeEnd ? new Date(entity.actListingTimeEnd) : null;
     const savedEndTimeIsInvalid = !savedEndTime || Number.isNaN(savedEndTime.getTime());
     const savedDraftEndTimeHasPassed = entity.actIsDraft === true && savedEndTime && savedEndTime <= new Date();
@@ -2320,14 +2328,14 @@ function SellPageInner() {
     setEndDateTime(toDatetimeLocalValue(
       savedEndTimeIsInvalid || savedDraftEndTimeHasPassed ? defaultEndTime : entity.actListingTimeEnd
     ));
-  }, []);
+  }, [categories]);
 
   // Fetch and load a specific existing draft by id, given its numeric or
   // document id — used both by switchToDraft() and by the "backend already
   // has a draft for you" recovery path in createNewDraft() below, and by
   // the localStorage → backend current-draft-id resolution in init().
   const loadExistingDraftById = useCallback(async (idForUrl) => {
-    const res = await apiClient.get(`/auction-items/${idForUrl}?populate[actImages][populate]=*`);
+    const res = await apiClient.get(`/auction-items/${idForUrl}?populate[actImages][populate]=*&populate[category][fields][0]=id&populate[category][fields][1]=name&populate[category][fields][2]=slug`);
     const entity = res?.data || res;
     localStorage.setItem(STORAGE_KEYS.CURRENT_DRAFT_ID, String(apiClient.resolveId(entity, 'id')));
     localStorage.setItem(STORAGE_KEYS.DRAFT_DOCUMENT_ID, String(apiClient.resolveId(entity)));
@@ -2389,7 +2397,7 @@ function SellPageInner() {
   // NOT surface an error to the user. It silently loads that existing
   // draft instead and treats it exactly like the normal
   // cached-draft-in-localStorage path: the form just opens on it.
-  const createNewDraft = useCallback(async (countryList, ownCountryId) => {
+  const createNewDraft = useCallback(async (countryList, ownCountryId, categoryList = categories) => {
     setPhase('creating');
     setErrorMsg('');
     try {
@@ -2399,7 +2407,8 @@ function SellPageInner() {
       } catch {
         storedCountryId = null;
       }
-      const defaultCountryId = storedCountryId || ownCountryId || countryList[0]?.id;
+      const defaultCountryId = ownCountryId || storedCountryId || countryList[0]?.id;
+      const defaultCategoryId = categoryList.find((category) => category.slug === 'uncategorized')?.id;
       if (!defaultCountryId) {
         throw new Error(
           'No countries available to list from — GET /countries likely failed (check the browser console for the actual error; a 403 there usually means the "find" permission on Country isn\'t enabled for the Authenticated role).'
@@ -2425,6 +2434,7 @@ function SellPageInner() {
           // `actImages` enforces "at least one item" as part of `required`.
           actImages: [],
           itemOriginCountry: defaultCountryId,
+          ...(defaultCategoryId ? { category: defaultCategoryId } : {}),
         },
       });
       const created = res?.data || res;
@@ -2458,7 +2468,7 @@ function SellPageInner() {
       setErrorMsg(err.message || 'Failed to create a draft listing');
       setPhase('error');
     }
-  }, [loadItemIntoForm, loadExistingDraftById]);
+  }, [categories, loadItemIntoForm, loadExistingDraftById]);
 
   // Ask the backend which draft (if any) belongs to the given user — used
   // as the fallback when localStorage has no cached draft id, before we
@@ -2488,6 +2498,7 @@ function SellPageInner() {
 
     async function init() {
       let countryList = [];
+      let categoryList = [];
       try {
         const res = await apiClient.get('/countries?populate=currency&sort=countryName:asc');
         countryList = res?.data || [];
@@ -2497,12 +2508,21 @@ function SellPageInner() {
       } finally {
         if (!cancelled) setCountriesLoading(false);
       }
+      try {
+        const response = await apiClient.get('/categories?sort=name:asc&pagination[pageSize]=100');
+        categoryList = Array.isArray(response?.data) ? response.data : [];
+        if (!cancelled) setCategories(categoryList);
+      } catch (err) {
+        console.error('Failed to load auction categories:', err.status, err.message);
+      } finally {
+        if (!cancelled) setCategoriesLoading(false);
+      }
 
       if (editDocumentId) {
         setIsEditMode(true);
         try {
           const res = await apiClient.get(
-            `/auction-items/${editDocumentId}?populate[actImages][populate]=*&populate[itemOriginCountry][populate]=currency&populate[seller][fields][0]=id`
+            `/auction-items/${editDocumentId}?populate[actImages][populate]=*&populate[itemOriginCountry][populate]=currency&populate[category][fields][0]=id&populate[category][fields][1]=name&populate[category][fields][2]=slug&populate[seller][fields][0]=id`
           );
           const entity = res?.data || res;
           const ownerId = apiClient.resolveId(entity.seller, 'id');
@@ -2537,7 +2557,7 @@ function SellPageInner() {
           // failed — meaning a perfectly valid cached draft got wiped and
           // recreated on EVERY page load. seller's id is now populated.
           const res = await apiClient.get(
-            `/auction-items/${cachedDocId}?populate[actImages][populate]=*&populate[seller][fields][0]=id`
+            `/auction-items/${cachedDocId}?populate[actImages][populate]=*&populate[category][fields][0]=id&populate[category][fields][1]=name&populate[category][fields][2]=slug&populate[seller][fields][0]=id`
           );
           const entity = res?.data || res;
           const ownerId = apiClient.resolveId(entity.seller, 'id');
@@ -2601,7 +2621,7 @@ function SellPageInner() {
 
       try {
         if (!cancelled) {
-          await createNewDraft(countryList, countryConfig?.countryId);
+          await createNewDraft(countryList, countryConfig?.countryId, categoryList);
         }
       } finally {
         releaseDraftCreationLock();
@@ -2650,7 +2670,7 @@ function SellPageInner() {
     localStorage.removeItem(STORAGE_KEYS.CURRENT_DRAFT_ID);
     localStorage.removeItem(STORAGE_KEYS.DRAFT_DOCUMENT_ID);
     setItem(null);
-    createNewDraft(countries, countryConfig?.countryId);
+    createNewDraft(countries, countryConfig?.countryId, categories);
   };
 
   // ── Field handlers ──
@@ -2680,6 +2700,10 @@ function SellPageInner() {
     }
   };
   const handleTownChange = (v) => { setTown(v); queueChange('actTown', v); };
+  const handleCategoryChange = (id) => {
+    setSelectedCategoryId(id);
+    queueChange('category', Number(id));
+  };
   const handleCountryChange = (id) => {
     setSelectedCountryId(id);
     setTown('');
@@ -2910,6 +2934,20 @@ function SellPageInner() {
           value={description}
           onChange={(e) => handleDescriptionChange(e.target.value)}
         />
+
+        <TextField
+          select
+          fullWidth
+          label="Category"
+          value={String(selectedCategoryId || '')}
+          onChange={(event) => handleCategoryChange(event.target.value)}
+          disabled={categoriesLoading || categories.length === 0}
+          helperText={!categoriesLoading && categories.length === 0 ? 'No categories are available yet.' : undefined}
+        >
+          {categories.map((category) => (
+            <MenuItem key={category.id} value={String(category.id)}>{category.name}</MenuItem>
+          ))}
+        </TextField>
 
         <TextField
           select

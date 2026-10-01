@@ -4,12 +4,13 @@
 
 import { AuthProvider } from './AuthContext';
 import ReactNativeWrapper from './ReactNativeWrapper';
+import { NotificationsProvider } from './NotificationsContext';
 
 export default function ContextProviders({ children }) {
   return (
     <ReactNativeWrapper>
       <AuthProvider>
-        {children}
+        <NotificationsProvider>{children}</NotificationsProvider>
       </AuthProvider>
     </ReactNativeWrapper>
   );

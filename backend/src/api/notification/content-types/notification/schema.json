@@ -1,0 +1,23 @@
+{
+  "kind": "collectionType",
+  "collectionName": "notifications",
+  "info": {
+    "singularName": "notification",
+    "pluralName": "notifications",
+    "displayName": "User Notification"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "title": { "type": "string", "required": true },
+    "body": { "type": "text", "required": true },
+    "notificationType": {
+      "type": "enumeration",
+      "enum": ["bid_placed", "outbid", "auction_closed", "auction_forfeited", "auction_paid", "payment_success", "payment_failed", "payment_required", "general"],
+      "default": "general"
+    },
+    "data": { "type": "json" },
+    "isRead": { "type": "boolean", "default": false },
+    "readAt": { "type": "datetime" },
+    "user": { "type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user" }
+  }
+}

@@ -21,6 +21,7 @@ export const GLOBAL_DEFAULTS = {
   FALLBACK_AGENT_COMMISSION_SPLIT_PERCENTAGE: 50.0,
   FALLBACK_ABSORB_PAYMENT_FEES: false,
   FALLBACK_PAYMENT_GATEWAY: 'pawapay',
+  FALLBACK_NOTIFICATION_AUTO_HIDE_SECONDS: 5,
 };
 
 export const STORAGE_KEYS = {
@@ -29,6 +30,7 @@ export const STORAGE_KEYS = {
   COUNTRY_CONFIG: 'bidz4u_country_config',
   REFERRAL_CODE: 'bidz4u_referral_tracking_id',
   SETTINGS: 'bidz4u_effective_settings',
+  PREFERRED_LISTING_COUNTRY: 'bidz4u_preferred_listing_country',
   // Draft auction-listing tracking (see app/sell/page.jsx). Deliberately two
   // separate keys, not one: CURRENT_DRAFT_ID holds the draft's NUMERIC id
   // (needed for the upload plugin's ref/refId attachment mechanism — see
